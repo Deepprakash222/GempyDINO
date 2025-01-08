@@ -33,8 +33,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main():
     
+    ###############################################################################
     # Seed the randomness 
-    seed = 42
+    ###############################################################################
+    seed = 42           
     np.random.seed(seed)
     torch.manual_seed(seed)
     # Ensure deterministic behavior
@@ -43,7 +45,9 @@ def main():
     # Setting the seed for Pyro sampling
     pyro.set_rng_seed(42)
     
+    ###############################################################################
     # Create a directory to store plots and results
+    ###############################################################################
     directory_path = "./Results"
     if not os.path.exists(directory_path):
         # Create the directory if it does not exist
@@ -51,14 +55,29 @@ def main():
         print(f"Directory '{directory_path}' was created.")
     else:
         print(f"Directory '{directory_path}' already exists.")
+        
+    ################################################################################
     # Create initial model with higher refinement for better resolution and save it
-    prior_filename=  directory_path + "/prior_model.png"
+    ###############################################################################
+    '''
+        Gempy is a package which is based on universal cokriging approach. It is similar to Gaussian 
+        process. Thus, it creates a covariance matrix based on input parameters and find the value of
+        scalar field at new location. So value of scalar field at new location is dependent on the input
+        parameters directly but not on whole grid. Therefore setting refinement higher is good for plotting 
+        whereas as it has no effect on find value at an new location. 
+    '''
+    prior_filename=  directory_path + "/prior_model.png" 
     geo_model_test = create_initial_gempy_model_3_layer(refinement=7,filename=prior_filename, save=True)
     # We can initialize again but with lower refinement because gempy solution are inddependent
     geo_model_test = create_initial_gempy_model_3_layer(refinement=3,filename=prior_filename, save=False)
+    
+    
     #####################################################################################################
     # Custom grid or rodes of mesh
     #####################################################################################################
+    '''
+        To find the output at any specific location can be done by creating a custom grid at that location. 
+    '''
     # Parameters for the grid
     grid_size = 5  # 100 x 100 grid
     x_values = np.linspace(0, 1000, grid_size)  # Create 100 points between -50 and 50
@@ -76,16 +95,37 @@ def main():
     gp.set_custom_grid(geo_model_test.grid, xyz_coord=xyz_coord)
     
     geo_model_test.interpolation_options.mesh_extraction = False
+    
+    ###############################################################################
+    # Solve the gempy to compute the model
+    ###############################################################################
     sol = gp.compute_model(geo_model_test)
     
+    ###############################################################################
+    # Check the coordinates of the input parameters
+    ###############################################################################
     sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
-    geo_model_test.transform.apply_inverse(sp_coords_copy_test)
-    geo_model_test.interpolation_options.sigmoid_slope = 200
+    geo_model_test.transform.apply_inverse(sp_coords_copy_test) 
+    
+    '''
+        Scalar field obtained by gempy is transformed so that it lies between 1 to total_number of layer.
+        Directly assigning the discrete values will make the output discontinous. Therefore at the bounday
+        between two layers, we like to join these transformed values using sigmoid. Therefore it regquires a 
+        sigmoid slope.
+    '''
+    geo_model_test.interpolation_options.sigmoid_slope = 200 
     gp.compute_model(geo_model_test)
     
     sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
 
-    # Compute and observe the thickness of the geological layer 
+    ###############################################################################
+    # Output at custom grid
+    ###############################################################################
+    '''
+        The output at custom grid values is continous and if rounded will give us the layer index. 
+        We can put a function on the top of this to provide some properties to each layer. 
+        
+    '''
     custom_grid_values_prior = torch.tensor(geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values)
     print(custom_grid_values_prior.shape)
     
@@ -100,16 +140,21 @@ def main():
     df_sp_init.to_csv(filename_initial_sp)
     df_or_init.to_csv(filename_initial_op)
     
+    ###############################################################################
     # Change the backend to PyTorch for probabilistic modeling
+    ###############################################################################
     BackendTensor.change_backend_gempy(engine_backend=gp.data.AvailableBackends.PYTORCH)
     
     geo_model_test.interpolation_options.sigmoid_slope = 200
     
+    ###############################################################################
+    # Make a list of gempy parameter which would be treated as a random variable
+    ###############################################################################
     test_list=[]
     test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype, device=device), "std":torch.tensor(0.06,dtype=dtype, device=device)}})
     test_list.append({"update":"interface_data","id":torch.tensor([4]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[4,2],dtype=dtype, device=device), "std":torch.tensor(0.06,dtype=dtype, device=device)}})
     
-    num_layers = len(test_list)
+    num_layers = len(test_list) # length of the list
 
 
     model = MyModel()
