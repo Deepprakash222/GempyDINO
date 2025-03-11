@@ -1,0 +1,63 @@
+In file included from /var/folders/lr/h2867zhs72gcy61j6_cy0n0r0000gq/T/tmpgoo7x5wo/dolfin_expression_7e32a28109bdef8e86db1bd97eb55d44.cpp:13:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/dolfin/function/Expression.h:26:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Dense:1:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Core:170:
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/NumTraits.h:223:12: warning: use of infinity is undefined behavior due to the currently enabled floating-point options [-Wnan-infinity-disabled]
+  223 |     return numext::numeric_limits<T>::infinity();
+      |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:3282:63: note: in instantiation of member function 'Eigen::GenericNumTraits<float>::infinity' requested here
+ 3282 |   const Packet4f infinity = pset1<Packet4f>(NumTraits<float>::infinity());
+      |                                                               ^
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:3282:45: warning: use of infinity is undefined behavior due to the currently enabled floating-point options [-Wnan-infinity-disabled]
+ 3282 |   const Packet4f infinity = pset1<Packet4f>(NumTraits<float>::infinity());
+      |                                             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:3292:45: warning: use of infinity is undefined behavior due to the currently enabled floating-point options [-Wnan-infinity-disabled]
+ 3292 |   const Packet2f infinity = pset1<Packet2f>(NumTraits<float>::infinity());
+      |                                             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /var/folders/lr/h2867zhs72gcy61j6_cy0n0r0000gq/T/tmpgoo7x5wo/dolfin_expression_7e32a28109bdef8e86db1bd97eb55d44.cpp:13:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/dolfin/function/Expression.h:26:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Dense:1:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Core:170:
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/NumTraits.h:223:12: warning: use of infinity is undefined behavior due to the currently enabled floating-point options [-Wnan-infinity-disabled]
+  223 |     return numext::numeric_limits<T>::infinity();
+      |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:3915:64: note: in instantiation of member function 'Eigen::GenericNumTraits<double>::infinity' requested here
+ 3915 |   const Packet2d infinity = pset1<Packet2d>(NumTraits<double>::infinity());
+      |                                                                ^
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:3915:45: warning: use of infinity is undefined behavior due to the currently enabled floating-point options [-Wnan-infinity-disabled]
+ 3915 |   const Packet2d infinity = pset1<Packet2d>(NumTraits<double>::infinity());
+      |                                             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/var/folders/lr/h2867zhs72gcy61j6_cy0n0r0000gq/T/tmpgoo7x5wo/dolfin_expression_7e32a28109bdef8e86db1bd97eb55d44.cpp:61:23: error: assigning to 'Scalar' (aka 'double') from incompatible type 'const NegativeReturnType' (aka 'const CwiseUnaryOp<scalar_opposite_op<double>, const Eigen::Ref<const Eigen::Matrix<double, -1, 1, 0, -1, 1>, 0, Eigen::InnerStride<1>>>')
+   61 |           values[0] = -x;
+      |                       ^~
+In file included from /var/folders/lr/h2867zhs72gcy61j6_cy0n0r0000gq/T/tmpgoo7x5wo/dolfin_expression_7e32a28109bdef8e86db1bd97eb55d44.cpp:13:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/dolfin/function/Expression.h:26:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Dense:1:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Core:250:
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/Default/GenericPacketMathFunctions.h:853:52: warning: use of infinity is undefined behavior due to the currently enabled floating-point options [-Wnan-infinity-disabled]
+  853 |   const RealPacket cst_pos_inf = pset1<RealPacket>(NumTraits<RealScalar>::infinity());
+      |                                                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/NEON/Complex.h:382:10: note: in instantiation of function template specialization 'Eigen::internal::psqrt_complex<Eigen::internal::Packet1cf>' requested here
+  382 |   return psqrt_complex<Packet1cf>(a);
+      |          ^
+In file included from /var/folders/lr/h2867zhs72gcy61j6_cy0n0r0000gq/T/tmpgoo7x5wo/dolfin_expression_7e32a28109bdef8e86db1bd97eb55d44.cpp:13:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/dolfin/function/Expression.h:26:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Dense:1:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Core:250:
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/Default/GenericPacketMathFunctions.h:853:52: warning: use of infinity is undefined behavior due to the currently enabled floating-point options [-Wnan-infinity-disabled]
+  853 |   const RealPacket cst_pos_inf = pset1<RealPacket>(NumTraits<RealScalar>::infinity());
+      |                                                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/NEON/Complex.h:386:10: note: in instantiation of function template specialization 'Eigen::internal::psqrt_complex<Eigen::internal::Packet2cf>' requested here
+  386 |   return psqrt_complex<Packet2cf>(a);
+      |          ^
+In file included from /var/folders/lr/h2867zhs72gcy61j6_cy0n0r0000gq/T/tmpgoo7x5wo/dolfin_expression_7e32a28109bdef8e86db1bd97eb55d44.cpp:13:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/dolfin/function/Expression.h:26:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Dense:1:
+In file included from /Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/Core:250:
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/Default/GenericPacketMathFunctions.h:853:52: warning: use of infinity is undefined behavior due to the currently enabled floating-point options [-Wnan-infinity-disabled]
+  853 |   const RealPacket cst_pos_inf = pset1<RealPacket>(NumTraits<RealScalar>::infinity());
+      |                                                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/deepprakashravi/miniforge3/envs/gempy_dino/include/eigen3/Eigen/src/Core/arch/NEON/Complex.h:575:10: note: in instantiation of function template specialization 'Eigen::internal::psqrt_complex<Eigen::internal::Packet1cd>' requested here
+  575 |   return psqrt_complex<Packet1cd>(a);
+      |          ^
+8 warnings and 1 error generated.
