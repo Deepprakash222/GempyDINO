@@ -11,15 +11,20 @@ from torch.utils.data import TensorDataset, DataLoader
 # Step 1: Define Neural Network
 # -------------------------------
     
+def build_network(layer_sizes):
+    layers = []
+    
+    for i in range(len(layer_sizes) - 1):
+        layers.append(nn.Linear(layer_sizes[i], layer_sizes[i + 1]))  # Fully connected layer
+        if i < len(layer_sizes) - 2:  # No activation for last layer
+            layers.append(nn.ReLU())  # Activation function (can be modified)
+    
+    return nn.Sequential(*layers)
+
 class NeuralNet(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
+    def __init__(self, layer_sizes):
         super(NeuralNet, self).__init__()
-        self.fc1 = nn.Linear(input_dim, output_dim)
-        self.fc2 = nn.Linear(output_dim, output_dim)
-        self.fc3 = nn.Linear(output_dim, output_dim)
+        self.network = build_network(layer_sizes)  # Use the dynamic builder
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
+        return self.network(x)

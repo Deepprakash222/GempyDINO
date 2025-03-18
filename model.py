@@ -51,8 +51,142 @@ from pyro.nn import PyroModule, PyroSample
 # Change the backend to PyTorch for probabilistic modeling
 BackendTensor.change_backend_gempy(engine_backend=gp.data.AvailableBackends.PYTORCH)
 
-# Change the backend to PyTorch for probabilistic modeling
-BackendTensor.change_backend_gempy(engine_backend=gp.data.AvailableBackends.PYTORCH)
+def FD_u(u_init, u_current, epsilon):
+    delta_u = (u_current - u_init)/epsilon
+    return delta_u
+
+def perturbation(mesh, custom_grid_values, epsilon, iteration, u_init, J_init):
+    error_sum = 0
+    
+    for i in range(iteration):
+        # create mesh and define function spaces
+        # Define mesh
+        oder =1
+        Vk = dl.FunctionSpace(mesh, 'Lagrange', 1)
+        Vu = dl.FunctionSpace(mesh, 'Lagrange', oder)
+        
+        # Define a custom thermal conductivity function
+        class ThermalConductivity(dl.UserExpression):
+            def __init__(self, custom_grid_values, mesh, **kwargs):
+                super().__init__(**kwargs)  # Initialize UserExpression properly
+                self.custom_grid_values = custom_grid_values  # Custom grid values passed in
+                self.mesh = mesh  # Mesh to check coordinates
+
+                # Create a dictionary of coordinates -> custom values
+                self.coord_map = {tuple(self.mesh.coordinates()[i]): self.custom_grid_values[i] 
+                                for i in range(self.mesh.num_vertices())}
+            def eval(self, value, x):
+                # Direct lookup from the coordinate dictionary
+                coord_tuple = tuple(x)  # Convert coordinate to tuple for hashing
+                if coord_tuple in self.coord_map:
+                    value[0] = self.coord_map[coord_tuple]
+                else:
+                    value[0] = 1.0  # Default value if no match (shouldn't happen)
+
+            def value_shape(self):
+                            return ()  # Scalar function, so empty shape
+
+        # # Create an instance of the thermal conductivity function with custom grid values
+        k = ThermalConductivity(custom_grid_values=custom_grid_values, mesh=mesh, degree=0)
+        
+        
+        # Interpolate onto the function space
+        k_func = dl.interpolate(k, Vk)
+        n = k_func.vector().get_local().shape[0]
+        random_index= np.random.randint(0, n)
+        k_func.vector()[random_index] = k_func.vector()[random_index] + epsilon
+        # ktrue = dl.Constant(2.0)
+        # define function for state and adjoint
+        u_current = dl.Function(Vu)
+        p = dl.Function(Vu)
+
+        # define Trial and Test Functions
+        u_trial, p_trial, k_trial = dl.TrialFunction(Vu), dl.TrialFunction(Vu), dl.TrialFunction(Vk)
+        u_test, p_test, k_test = dl.TestFunction(Vu), dl.TestFunction(Vu), dl.TestFunction(Vk)
+
+        
+
+        class TopBoundary(dl.SubDomain):
+                def inside(self, x, on_boundary):
+                    return on_boundary and abs(x[1] - 1) < dl.DOLFIN_EPS
+
+        class BottomBoundary(dl.SubDomain):
+            def inside(self, x, on_boundary):
+                return on_boundary and abs(x[1]) < dl.DOLFIN_EPS
+
+        class LeftBoundary(dl.SubDomain):
+            def inside(self, x, on_boundary):
+                return on_boundary and abs(x[0]) < dl.DOLFIN_EPS
+
+        class RightBoundary(dl.SubDomain):
+            def inside(self, x, on_boundary):
+                return on_boundary and abs(x[0] - 1) < dl.DOLFIN_EPS
+        
+        class FrontBoundary(dl.SubDomain):
+            def inside(self, x, on_boundary):
+                return on_boundary and abs(x[0]) < dl.DOLFIN_EPS
+
+        class BackBoundary(dl.SubDomain):
+            def inside(self, x, on_boundary):
+                return on_boundary and abs(x[0] - 1) < dl.DOLFIN_EPS
+
+
+        boundary_parts = dl.MeshFunction("size_t", mesh, mesh.topology().dim()-1)
+        #boundary_parts = FacetFunction("size_t", mesh)
+        boundary_parts.set_all(0)
+
+        Gamma_top = TopBoundary()
+        Gamma_top.mark(boundary_parts, 1)
+        Gamma_bottom = BottomBoundary()
+        Gamma_bottom.mark(boundary_parts, 2)
+        Gamma_left = LeftBoundary()
+        Gamma_left.mark(boundary_parts, 3)
+        Gamma_right = RightBoundary()
+        Gamma_right.mark(boundary_parts, 4)
+        Gamma_front = TopBoundary()
+        Gamma_front.mark(boundary_parts, 5)
+        Gamma_back = BottomBoundary()
+        Gamma_back.mark(boundary_parts, 6)
+        
+        u_L = dl.Constant(1.)
+        u_R = dl.Constant(0.)
+        
+        
+
+        #sigma_bottom = Expression('-(pi/2.0)*sin(2*pi*x[0])', degree=5)
+        sigma_right = dl.Constant(10.)
+        sigma_left    = dl.Constant(10.)
+
+
+        
+        bc_state = [dl.DirichletBC(Vu, u_L, boundary_parts, 3),
+            dl.DirichletBC(Vu, u_R, boundary_parts, 4)]
+
+
+        
+        ds = dl.Measure("ds", subdomain_data=boundary_parts)
+        
+        # We added our weak formulation to the cost functional to form the Langerangian 
+        ##########################################################################################
+        # weak form for setting up the state equation
+        ##########################################################################################
+
+        # ---------------- 3️⃣ Define the PDE Weak Formulation  ----------------
+        # weak form for setting up the state equation
+        a_state = dl.inner( k_func * dl.grad(u_trial), dl.grad(u_test)) * dl.dx
+        #L_state = m_func * u_test * dl.dx
+        L_state =  dl.Constant(0.) * u_test * dl.dx #+ sigma_left * u_test * ds(3) - sigma_right * u_test * ds(4)
+        # solve state equation
+        state_A, state_b = dl.assemble_system (a_state, L_state, bc_state)
+        dl.solve (state_A, u_current.vector(), state_b)
+        
+        du_dk_tilde_k = FD_u(u_init=u_init.vector().get_local(), u_current=u_current.vector().get_local(), epsilon=epsilon)
+        J_true = J_init[:,random_index]
+        error = np.linalg.norm(J_true - du_dk_tilde_k )
+        error_sum = error_sum + error
+        
+        
+    return error_sum
 
 class MyModel(PyroModule):
     def __init__(self):
@@ -326,26 +460,37 @@ class MyModel(PyroModule):
             plt.close()
             
             # Sensitivity 
-            C_equ   = ufl.inner( k_trial * ufl.grad(u), ufl.grad(u_test)) * ufl.dx
+            C_equ   = ufl.inner( k_trial * ufl.grad(u), ufl.grad(p_test)) * ufl.dx
             # assemble matrix C
             C =  dl.assemble(C_equ)
-            g, m_delta = dl.Vector(), dl.Vector()
 
             M_equ   = ufl.inner(k_trial, k_test) * ufl.dx
 
+
+
             # assemble matrix M
             M = dl.assemble(M_equ)
+            M_u = dl.assemble(M_equ)
 
-            C_matrix = C.array()
+
+            # C_ = C.array()[1:-1,1:-1]
+            J =   (C.array().T @ adjoint_matrix).T
             
-            #P_matrix = adjoint_matrix
-            P_matrix = np.diag(p.vector().get_local())
-            #M_matrix = M.array()
-            rhs =    P_matrix.T @ C_matrix
-            G = rhs
+            ########check the Jacobian if it is correct or not #####
+            # epsilon_data = np.array([1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0])
+            # error_data = []
+            # for i in range(len(epsilon_data)):
+            #     error_data.append(perturbation(mesh=mesh, custom_grid_values=custom_grid_values, epsilon=epsilon_data[i], iteration=500, u_init=u, J_init=J))
+            # plt.figure(figsize=(15,5))
+            # plt.plot(np.log10(epsilon_data), np.log10(np.array(error_data)))
+            # plt.xlabel("log10(epsilon)")
+            # plt.ylabel("log10(error_norm_sum)")
+            # plt.savefig("Test_Jacobain_matrix.png")
+            # plt.close()
+            
             #G = np.linalg.solve(M_matrix, C_matrix.T @ P_matrix)
             
-            pyro.deterministic("grad_K_u", torch.tensor(G))  # Register y explicitly
+            pyro.deterministic("grad_K_u", torch.tensor(J))  # Register y explicitly
             pyro.deterministic("u", torch.tensor(u.vector().get_local()))  # Register y explicitly
             
             #####################################TODO##########################################
