@@ -167,8 +167,8 @@ def main():
     
     
     # ---------------- 1️⃣ Create the Mesh ----------------
-    nx = 127
-    ny = 127
+    nx = 63
+    ny = 63
     nz = 7
     degree = 1
     mesh = dl.UnitSquareMesh(comm, nx, ny)
@@ -337,7 +337,7 @@ def main():
         #dot = pyro.render_model(model.model_test, model_args=(test_list,geo_model_test,num_layers,mesh,degree, dtype),render_distributions=True,filename=filename_Bayesian_graph)
         dot = pyro.render_model(model.create_sample, model_args=(test_list,geo_model_test,num_layers,dtype))
         # Generate 50 samples
-        num_samples = 1000 # N
+        num_samples = 10000 # N
         predictive = Predictive(model.create_sample, num_samples=num_samples)
         samples = predictive(test_list,geo_model_test,num_layers,dtype)
         

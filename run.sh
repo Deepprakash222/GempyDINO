@@ -9,13 +9,13 @@
 ### You must at least specify minutes or days and hours and may add or
 ### leave out any other parameters
 
-#SBATCH --time=01:00:00
+#SBATCH --time=15:00:00
 
 ### Request all CPUs on one node
-#SBATCH --nodes=2
+#SBATCH --nodes=1
 
 ### Request number of CPUs
-#SBATCH --ntasks=1
+#SBATCH --ntasks=32
 
 #SBATCH --cpus-per-task=1
 
