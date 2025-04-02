@@ -14,7 +14,7 @@ def L2_accuaracy(true_Data, nueral_network_output):
     '''
     RL=0
     for i in range(true_Data.shape[0]):
-        RL += torch.norm(true_Data[i] - nueral_network_output[i])/ torch.norm(true_Data[i])
+        RL += (torch.norm(true_Data[i] - nueral_network_output[i])**2)/ (torch.norm(true_Data[i])**2)
     Expecation_RL = RL/true_Data.shape[0]
     L2_error = 1- torch.sqrt(Expecation_RL)
     return L2_error

@@ -23,6 +23,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader, random_split
+from torch.func import jacrev
 
 import gempy as gp
 import gempy_engine
@@ -36,7 +37,8 @@ from model import MyModel
 dtype = torch.float64
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import dolfin as dl
 import ufl
@@ -58,6 +60,9 @@ from train_nn import *
 logging.getLogger('FFC').setLevel(logging.WARNING)
 logging.getLogger('UFL').setLevel(logging.WARNING)
 dl.set_log_active(False)
+
+from mpi4py import MPI
+
 
 def check_gempy_jacobian(epsilon, geo_model_test,mu_1, mu_2, custom_grid_values, J):
     sum=0
@@ -103,6 +108,15 @@ def check_gempy_jacobian(epsilon, geo_model_test,mu_1, mu_2, custom_grid_values,
     return sum
         
 def main():
+    
+    # Get the MPI communicator
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+        
+    comm.Barrier()
+    print(f"Process {rank} of {size}")
+    
     
     ###############################################################################
     # Seed the randomness 
@@ -151,29 +165,43 @@ def main():
     '''
     
     
+    
     # ---------------- 1️⃣ Create the Mesh ----------------
-    nx = 31
-    ny = 31
+    nx = 127
+    ny = 127
     nz = 7
     degree = 1
-    mesh = dl.UnitSquareMesh(nx, ny)
+    mesh = dl.UnitSquareMesh(comm, nx, ny)
     #mesh = dl.UnitCubeMesh(nx,ny,nz)
     loaded_array = mesh.coordinates()
-    print(loaded_array)
+    #print(loaded_array)
     if loaded_array.shape[1]==2:
         xyz_coord = np.insert(loaded_array, 1, 0, axis=1)
     elif loaded_array.shape[1]==3:
         xyz_coord = loaded_array
-    print("nodes shape: ",xyz_coord.shape)
     
-    directory_path = directory_path +"/Nodes_"+ str(xyz_coord.shape[0])
-    if not os.path.exists(directory_path):
-        # Create the directory if it does not exist
-        os.makedirs(directory_path)
-        print(f"Directory '{directory_path}' was created.")
-    else:
-        print(f"Directory '{directory_path}' already exists.")
-    # Set the custom grid
+    comm.Barrier()
+    print("nodes shape: ",xyz_coord.shape)
+    # Gather mesh coordinates on rank 0
+    all_coords = comm.gather(loaded_array, root=0)
+    # Ensure all ranks have sent their mesh before proceeding
+    comm.Barrier()
+    
+    
+    
+    if rank == 0:
+        nodes_coord_combined = np.vstack(all_coords)
+        unique_nodes = np.unique(nodes_coord_combined, axis=0)  # Remove ghost nodes
+        directory_path = directory_path +"/Nodes_"+ str(unique_nodes.shape[0])
+        if not os.path.exists(directory_path):
+            # Create the directory if it does not exist
+            os.makedirs(directory_path)
+            print(f"Directory '{directory_path}' was created.")
+        else:
+            print(f"Directory '{directory_path}' already exists.")
+        # Set the custom grid
+        
+    comm.Barrier()
     gp.set_custom_grid(geo_model_test.grid, xyz_coord=xyz_coord)
     
     geo_model_test.interpolation_options.mesh_extraction = False
@@ -211,7 +239,6 @@ def main():
     '''
     custom_grid_values_prior = torch.tensor(geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values)
     
-    
     ################################################################################
     # Store the Initial Interface data and orientation data
     ################################################################################
@@ -244,40 +271,43 @@ def main():
     # Example to show how to update the gempy paramter and show it's gradient
     ###
     
-    mu_1 = torch.tensor(sp_coords_copy_test[1, 2], dtype=dtype, requires_grad=True)
-    mu_2 = torch.tensor(sp_coords_copy_test[4, 2], dtype=dtype, requires_grad=True)
-    list_paramter = [mu_1, mu_2]
+    # mu_1 = torch.tensor(sp_coords_copy_test[1, 2], dtype=dtype, requires_grad=True)
+    # mu_2 = torch.tensor(sp_coords_copy_test[4, 2], dtype=dtype, requires_grad=True)
+    # list_paramter = [mu_1, mu_2]
     
     
-    interpolation_input = geo_model_test.interpolation_input
-    print(type(interpolation_input))
+    # interpolation_input = geo_model_test.interpolation_input
+    # print(type(interpolation_input))
+    # # If 'sp_coords' is a tensor and you want to convert it to float32
     
-    interpolation_input.surface_points.sp_coords = torch.index_put(
-                            interpolation_input.surface_points.sp_coords,
-                            (torch.tensor([1]), torch.tensor([2])),
-                            mu_1)
-    interpolation_input.surface_points.sp_coords = torch.index_put(
-                            interpolation_input.surface_points.sp_coords,
-                            (torch.tensor([4]), torch.tensor([2])),
-                            mu_2)
-    # # Compute the geological model
-    geo_model_test.solutions = gempy_engine.compute_model(
-                interpolation_input=interpolation_input,
-                options=geo_model_test.interpolation_options,
-                data_descriptor=geo_model_test.input_data_descriptor,
-                geophysics_input=geo_model_test.geophysics_input,
-            )
+
+    # interpolation_input.surface_points.sp_coords = torch.index_put(
+    #                         interpolation_input.surface_points.sp_coords,
+    #                         (torch.tensor([1]), torch.tensor([2])),
+    #                         mu_1)
+    # interpolation_input.surface_points.sp_coords = torch.index_put(
+    #                         interpolation_input.surface_points.sp_coords,
+    #                         (torch.tensor([4]), torch.tensor([2])),
+    #                         mu_2)
+    # # # Compute the geological model
+    # geo_model_test.solutions = gempy_engine.compute_model(
+    #             interpolation_input=interpolation_input,
+    #             options=geo_model_test.interpolation_options,
+    #             data_descriptor=geo_model_test.input_data_descriptor,
+    #             geophysics_input=geo_model_test.geophysics_input,
+    #         )
             
-    # Compute and observe the thickness of the geological layer
-    custom_grid_values = geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
+    # # Compute and observe the thickness of the geological layer
+   
+    # custom_grid_values = geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
     
-    # Compute gradient
-    #custom_grid_values.backward(gradient_argument)
-    grad_K_k =torch.zeros((2, custom_grid_values.shape[0]),dtype=dtype)
-    for i in range(len(list_paramter)):
-        for j in range(custom_grid_values.shape[0]):
-            y_x = grad(custom_grid_values[j], list_paramter[i],  create_graph=True)
-            grad_K_k[i,j] = y_x[0]
+    
+    # grad_K_k =torch.zeros((2, custom_grid_values.shape[0]),dtype=dtype)
+    
+    # for i in range(len(list_paramter)):
+    #     for j in range(custom_grid_values.shape[0]):
+    #         y_x = grad(custom_grid_values[j], list_paramter[i],  retain_graph=True)
+    #         grad_K_k[i,j] = y_x[0]
     
     ############check if the jacobian calcualted for Gempy is corect ##########    
     # epsilon_data = [1e-13, 1e-12,1e-11, 1e-10, 1e-9,1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]
@@ -292,62 +322,140 @@ def main():
     # plt.savefig("Gempy_Jacobian_test.png")
     # plt.close()
     
+    model = MyModel()
+    if rank==0:
+    
+        #torch.multiprocessing.set_start_method("spawn", force=True)
+        #torch.multiprocessing.set_sharing_strategy("file_system")
+        
+        filename_Bayesian_graph =directory_path +"/Bayesian_graph.png"
+        
+        pyro.clear_param_store()
+        
+        
+        # We can build a probabilistic model using pyro by calling it 
+        #dot = pyro.render_model(model.model_test, model_args=(test_list,geo_model_test,num_layers,mesh,degree, dtype),render_distributions=True,filename=filename_Bayesian_graph)
+        dot = pyro.render_model(model.create_sample, model_args=(test_list,geo_model_test,num_layers,dtype))
+        # Generate 50 samples
+        num_samples = 1000 # N
+        predictive = Predictive(model.create_sample, num_samples=num_samples)
+        samples = predictive(test_list,geo_model_test,num_layers,dtype)
+        
+        ######store the samples ######
+        parameters = torch.stack((samples["mu_1"], samples["mu_2"]), dim=1) # (N, p) = number of sample X number of paramter
+    
+        np.save(directory_path +"/input.npy",parameters.detach().numpy())
+    else:
+        parameters = None
+    
+    comm.Barrier()
+    # Broadcast GemPy output to all ranks
+    parameters = comm.bcast(parameters, root=0)
 
     
+    # # conductivity/ porosity at each node
+    # K = samples["K"] # size of samples X number of grid points , (N X dU) 
+    # print(K.shape)
     
-    model = MyModel()
+    grad_data , J, U =[], [], []
+    for i in range(parameters.shape[0]):
+        
+        mu_1 = parameters[i,0].clone().requires_grad_(True)
+        mu_2 = parameters[i,1].clone().requires_grad_(True)
+        list_paramter = [mu_1, mu_2]
+        
+        
+        interpolation_input = geo_model_test.interpolation_input
+        
+        # If 'sp_coords' is a tensor and you want to convert it to float32
+        
+
+        interpolation_input.surface_points.sp_coords = torch.index_put(
+                                interpolation_input.surface_points.sp_coords,
+                                (torch.tensor([1]), torch.tensor([2])),
+                                mu_1)
+        interpolation_input.surface_points.sp_coords = torch.index_put(
+                                interpolation_input.surface_points.sp_coords,
+                                (torch.tensor([4]), torch.tensor([2])),
+                                mu_2)
+        # # Compute the geological model
+        geo_model_test.solutions = gempy_engine.compute_model(
+                    interpolation_input=interpolation_input,
+                    options=geo_model_test.interpolation_options,
+                    data_descriptor=geo_model_test.input_data_descriptor,
+                    geophysics_input=geo_model_test.geophysics_input,
+                )
+                
+        # Compute and observe the thickness of the geological layer
     
-    #torch.multiprocessing.set_start_method("spawn", force=True)
-    #torch.multiprocessing.set_sharing_strategy("file_system")
+        custom_grid_values = geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
+        
+        # Identity = torch.eye(custom_grid_values.shape[0], dtype=dtype)
+        
+        grad_K_k =torch.zeros(( parameters.shape[1],custom_grid_values.shape[0]),dtype=dtype)
+        
+        for k in range(len(list_paramter)):
+            for j in range(custom_grid_values.shape[0]):
+                y_x = grad(custom_grid_values[j], list_paramter[k],  retain_graph=True)
+                grad_K_k[k,j] = y_x[0]
+        
+        grad_data.append(grad_K_k)
+        
+        #print("Custom_grid_values: ", custom_grid_values.shape)
+        
+        U_data, J_data, =  model.solve_pde(custom_grid_values, mesh, grad_K_k,  degree, comm, rank, dtype)
+        if rank ==0:
+            J.append(J_data)
+            U.append(U_data)
+        
     
-    filename_Bayesian_graph =directory_path +"/Bayesian_graph.png"
+    #u = samples["u"] # size of samples X number of grid points , (N X M)
+    # grad_K_k = torch.stack(grad_data)
+    # print(grad_K_k.shape)
     
-    pyro.clear_param_store()
     
+    comm.Barrier()
     
-    # We can build a probabilistic model using pyro by calling it 
-    #dot = pyro.render_model(model.model_test, model_args=(test_list,geo_model_test,num_layers,mesh,degree, dtype),render_distributions=True,filename=filename_Bayesian_graph)
-    dot = pyro.render_model(model.model_test, model_args=(test_list,geo_model_test,num_layers, mesh, degree, dtype))
-    # Generate 50 samples
-    num_samples = 1000 # N
-    predictive = Predictive(model.model_test, num_samples=num_samples)
-    samples = predictive(test_list,geo_model_test,num_layers, mesh, degree,  dtype)
+    if rank==0:
+        u = np.vstack(U)
+        grad_k_u = np.stack(J)
+        print(u.shape)
+        print(grad_k_u.shape)
+        #u = torch.stack(U)
+        np.save(directory_path +"/u.npy", u)
+        np.save(directory_path +"/Jacobian.npy", grad_k_u)
     
-    ######store the samples ######
-    paramter = torch.stack((samples["mu_1"], samples["mu_2"]), dim=1) # (N, p) = number of sample X number of paramter
+    # mean_u = torch.mean(u,dim=0)
+    # np.save(directory_path+"/Mean_u.npy", mean_u)
+    # u = u - mean_u
+    # N, q = u.shape # N= Number of samples, q = length of u 
     
-    np.save(directory_path +"/input.npy",paramter.detach().numpy())
-    u = samples["u"] # size of samples X number of grid points , (N X M)
-    np.save(directory_path +"/u.npy", u)
-    mean_u = torch.mean(u,dim=0)
-    np.save(directory_path+"/Mean_u.npy", mean_u)
-    u = u - mean_u
-    N, q = u.shape # N= Number of samples, q = length of u 
+    # result_sum = torch.zeros(q,q, dtype=dtype)  # Initialize a tensor to accumulate the sum
+    # for i in range(N):
+    #     u_data = u[i].reshape(-1,1)# Reshape u to [1024, 1]
+    #     result_sum += u_data @ u_data.T  # Matrix multiplication to get [1024, 1024]
+    # cov_matrix_u = result_sum / N
+    # eigenvalues_u, eigenvectors_u = torch.linalg.eig(cov_matrix_u)
     
-    result_sum = torch.zeros(q,q, dtype=dtype)  # Initialize a tensor to accumulate the sum
-    for i in range(N):
-        u_data = u[i].reshape(-1,1)# Reshape u to [1024, 1]
-        result_sum += u_data @ u_data.T  # Matrix multiplication to get [1024, 1024]
-    cov_matrix_u = result_sum / N
-    eigenvalues_u, eigenvectors_u = torch.linalg.eig(cov_matrix_u)
+    # cuttoff = 1e-6
+    # mask_u = eigenvalues_u.real > cuttoff
+    # eig_u = eigenvalues_u[mask_u].real
+    # eig_vec_u = eigenvectors_u[:,mask_u].real
+    # np.save(directory_path+"/Truncated_Eigen_Vector_Matrix.npy", eig_vec_u)
     
-    cuttoff = 1e-6
-    mask_u = eigenvalues_u.real > cuttoff
-    eig_u = eigenvalues_u[mask_u].real
-    eig_vec_u = eigenvectors_u[:,mask_u].real
-    np.save(directory_path+"/Truncated_Eigen_Vector_Matrix.npy", eig_vec_u)
+    # r = eig_vec_u.shape[1] # dimension after reduction
     
-    r = eig_vec_u.shape[1] # dimension after reduction
-    
-    # conductivity/ porosity at each node
-    K = samples["K"] # size of samples X number of grid points , (N X dU) 
+    # # conductivity/ porosity at each node
+    # K = samples["K"] # size of samples X number of grid points , (N X dU) 
     # gradient of u with k , ∂u/∂K
-    grad_K_u = samples["grad_K_u"] # (N X dU x dU)
-    
-    print(grad_K_u.shape, grad_K_k.shape)
-    grad_k_u = grad_K_u @ grad_K_k.T  # ∂u/∂k = ∂u/∂K * ∂K/∂k,  size of samples X number of paramters X number of grid points(N, p, M) 
-    print(grad_k_u.shape) # size of samples X number of grid points X numper of input paramter N x dU x m
-    np.save(directory_path +"/Jacobian.npy", grad_k_u.detach().numpy())
+    #grad_K_u = samples["grad_K_u"] # (N X dU x dU)
+    # grad_K_u = torch.stack(J)
+    # print(grad_K_u.shape, grad_K_k.shape)
+    # # Perform batch matrix multiplication
+    # grad_k_u = torch.matmul(grad_K_u, grad_K_k)  # ∂u/∂k = ∂u/∂K * ∂K/∂k,  size of samples X number of paramters X number of grid points(N, p, M) 
+    # print(grad_k_u.shape) # size of samples X number of grid points X numper of input paramter N x dU x m
+    # grad_k_u = grad_K_u
+    # np.save(directory_path +"/Jacobian.npy", grad_k_u.detach().numpy())
     
     
         

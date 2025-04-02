@@ -1,0 +1,36 @@
+
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: 
+libgomp: Thread creation failed: Resource temporarily unavailable
+
+libgomp: Thread creation failed: Resource temporarily unavailable
+
+libgomp: 
+libgomp: Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+
+libgomp: Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+Thread creation failed: Resource temporarily unavailable
+free(): corrupted unsorted chunks
+/var/spool/slurm/job55506052/slurm_script: line 34: 30653 Segmentation fault      (core dumped) python run_nn.py

@@ -47,6 +47,7 @@ logging.getLogger('FFC').setLevel(logging.WARNING)
 logging.getLogger('UFL').setLevel(logging.WARNING)
 dl.set_log_active(False)
 
+
 from pyro.nn import PyroModule, PyroSample
 # Change the backend to PyTorch for probabilistic modeling
 BackendTensor.change_backend_gempy(engine_backend=gp.data.AvailableBackends.PYTORCH)
@@ -64,6 +65,7 @@ def perturbation(mesh, custom_grid_values, epsilon, iteration, u_init, J_init):
         oder =1
         Vk = dl.FunctionSpace(mesh, 'Lagrange', 1)
         Vu = dl.FunctionSpace(mesh, 'Lagrange', oder)
+        
         
         # Define a custom thermal conductivity function
         class ThermalConductivity(dl.UserExpression):
@@ -88,7 +90,6 @@ def perturbation(mesh, custom_grid_values, epsilon, iteration, u_init, J_init):
 
         # # Create an instance of the thermal conductivity function with custom grid values
         k = ThermalConductivity(custom_grid_values=custom_grid_values, mesh=mesh, degree=0)
-        
         
         # Interpolate onto the function space
         k_func = dl.interpolate(k, Vk)
@@ -191,9 +192,9 @@ def perturbation(mesh, custom_grid_values, epsilon, iteration, u_init, J_init):
 class MyModel(PyroModule):
     def __init__(self):
         super(MyModel, self).__init__()
-    
-    #@config_enumerate
-    def model_test(self,interpolation_input_,geo_model_test,num_layers, mesh, degree, dtype):
+        
+    def create_sample(self, interpolation_input_,geo_model_test,num_layers,dtype):
+        
             """
             This Pyro model represents the probabilistic aspects of the geological model.
             It defines a prior distribution for the top layer's location and
@@ -206,7 +207,6 @@ class MyModel(PyroModule):
             num_layers: represents the number of layers we want to include in the model
             
             """
-
 
             Random_variable ={}
             
@@ -236,25 +236,25 @@ class MyModel(PyroModule):
                         print("We have to include the distribution")
                 
                 
-                    # Check which co-ordinates direction we wants to allow and modify the surface point data
-                    if interpolation_input_data["direction"]=="X":
-                        interpolation_input.surface_points.sp_coords = torch.index_put(
-                            interpolation_input.surface_points.sp_coords,
-                            (torch.tensor([interpolation_input_data["id"]]), torch.tensor([0])),
-                            Random_variable["mu_"+ str(counter)])
-                    elif interpolation_input_data["direction"]=="Y":
-                        interpolation_input.surface_points.sp_coords = torch.index_put(
-                            interpolation_input.surface_points.sp_coords,
-                            (torch.tensor([interpolation_input_data["id"]]), torch.tensor([1])),
-                            Random_variable["mu_"+ str(counter)])
-                    elif interpolation_input_data["direction"]=="Z":
-                        interpolation_input.surface_points.sp_coords = torch.index_put(
-                            interpolation_input.surface_points.sp_coords,
-                            (interpolation_input_data["id"], torch.tensor([2])),
-                            Random_variable["mu_"+ str(counter)])
+                    # # Check which co-ordinates direction we wants to allow and modify the surface point data
+                    # if interpolation_input_data["direction"]=="X":
+                    #     interpolation_input.surface_points.sp_coords = torch.index_put(
+                    #         interpolation_input.surface_points.sp_coords,
+                    #         (torch.tensor([interpolation_input_data["id"]]), torch.tensor([0])),
+                    #         Random_variable["mu_"+ str(counter)])
+                    # elif interpolation_input_data["direction"]=="Y":
+                    #     interpolation_input.surface_points.sp_coords = torch.index_put(
+                    #         interpolation_input.surface_points.sp_coords,
+                    #         (torch.tensor([interpolation_input_data["id"]]), torch.tensor([1])),
+                    #         Random_variable["mu_"+ str(counter)])
+                    # elif interpolation_input_data["direction"]=="Z":
+                    #     interpolation_input.surface_points.sp_coords = torch.index_put(
+                    #         interpolation_input.surface_points.sp_coords,
+                    #         (interpolation_input_data["id"], torch.tensor([2])),
+                    #         Random_variable["mu_"+ str(counter)])
                         
-                    else:
-                        print("Wrong direction")
+                    # else:
+                    #     print("Wrong direction")
                 
                 counter=counter+1
             
@@ -273,23 +273,31 @@ class MyModel(PyroModule):
             
             #print(interpolation_input.surface_points.sp_coords)
             
-            # # Compute the geological model
-            geo_model_test.solutions = gempy_engine.compute_model(
-                interpolation_input=interpolation_input,
-                options=geo_model_test.interpolation_options,
-                data_descriptor=geo_model_test.input_data_descriptor,
-                geophysics_input=geo_model_test.geophysics_input,
-            )
+            # # # Compute the geological model
+            # geo_model_test.solutions = gempy_engine.compute_model(
+            #     interpolation_input=interpolation_input,
+            #     options=geo_model_test.interpolation_options,
+            #     data_descriptor=geo_model_test.input_data_descriptor,
+            #     geophysics_input=geo_model_test.geophysics_input,
+            # )
             
-            # Compute and observe the thickness of the geological layer
-            custom_grid_values = geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
+            # # Compute and observe the thickness of the geological layer
+            # custom_grid_values = geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
             
-            pyro.deterministic("K", custom_grid_values)  # Register y explicitly
+            # pyro.deterministic("K", custom_grid_values)  # Register y explicitly
+    #@config_enumerate
+    
+    def solve_pde(self, custom_grid_values, mesh, gradient_K_k, degree, comm, rank,  dtype):
+
             ################################################################################################################
             # Build Likelihood function here
             ################################################################################################################
             
-                    
+            # comm = dl.MPI.comm_world
+            # rank = dl.MPI.rank(comm)
+            # size = dl.MPI.size(comm)
+            # print(f"Process {rank} out of {size}")
+            
             Vk = dl.FunctionSpace(mesh, 'Lagrange', 1)
             Vu  = dl.FunctionSpace(mesh, 'Lagrange', degree) # degree=1 is piecewise linear, degree=2 is piecewise quadratic
             # print( "dim(Vh) = ", Vu.dim() )
@@ -346,7 +354,7 @@ class MyModel(PyroModule):
             Gamma_back = BottomBoundary()
             Gamma_back.mark(boundary_parts, 6)
             
-            u_L = dl.Constant(100.)
+            u_L = dl.Constant(1.)
             u_R = dl.Constant(0.)
             
             
@@ -365,44 +373,66 @@ class MyModel(PyroModule):
             bc_adj = [dl.DirichletBC(Vu, dl.Constant(0.), boundary_parts, 3),
                 dl.DirichletBC(Vu, dl.Constant(0.), boundary_parts, 4)]
             
+            bc_tan = [dl.DirichletBC(Vu, dl.Constant(0.), boundary_parts, 3),
+                dl.DirichletBC(Vu, dl.Constant(0.), boundary_parts, 4)]
+            
             ds = dl.Measure("ds", subdomain_data=boundary_parts)
             
             # ---------------- 3️⃣ Define Discrete k(x,y) Values ----------------
             
-            # Define a custom thermal conductivity function
-            class ThermalConductivity(dl.UserExpression):
-                def __init__(self, custom_grid_values, mesh, **kwargs):
-                    super().__init__(**kwargs)  # Initialize UserExpression properly
-                    self.custom_grid_values = custom_grid_values  # Custom grid values passed in
-                    self.mesh = mesh  # Mesh to check coordinates
+            # # Define a custom thermal conductivity function
+            # class ThermalConductivity(dl.UserExpression):
+            #     def __init__(self, custom_grid_values, mesh, **kwargs):
+            #         super().__init__(**kwargs)  # Initialize UserExpression properly
+            #         self.custom_grid_values = custom_grid_values  # Custom grid values passed in
+            #         self.mesh = mesh  # Mesh to check coordinates
 
-                    # Create a dictionary of coordinates -> custom values
-                    self.coord_map = {tuple(self.mesh.coordinates()[i]): self.custom_grid_values[i] 
-                                    for i in range(self.mesh.num_vertices())}
-                def eval(self, value, x):
-                    # Direct lookup from the coordinate dictionary
-                    coord_tuple = tuple(x)  # Convert coordinate to tuple for hashing
-                    if coord_tuple in self.coord_map:
-                        value[0] = self.coord_map[coord_tuple]
-                    else:
-                        value[0] = 1.0  # Default value if no match (shouldn't happen)
+            #         # Create a dictionary of coordinates -> custom values
+            #         self.coord_map = {tuple(self.mesh.coordinates()[i]): self.custom_grid_values[i] 
+            #                         for i in range(self.mesh.num_vertices())}
+            #     def eval(self, value, x):
+            #         # Direct lookup from the coordinate dictionary
+            #         coord_tuple = tuple(x)  # Convert coordinate to tuple for hashing
+            #         if coord_tuple in self.coord_map:
+            #             value[0] = self.coord_map[coord_tuple]
+            #         else:
+            #             value[0] = 1.0  # Default value if no match (shouldn't happen)
 
-                def value_shape(self):
-                                return ()  # Scalar function, so empty shape
+            #     def value_shape(self):
+            #                     return ()  # Scalar function, so empty shape
 
-            # # Create an instance of the thermal conductivity function with custom grid values
-            k = ThermalConductivity(custom_grid_values=custom_grid_values, mesh=mesh, degree=0)
+            # # # Create an instance of the thermal conductivity function with custom grid values
+            # k = ThermalConductivity(custom_grid_values=custom_grid_values, mesh=mesh, degree=0)
             
             
-            # Interpolate onto the function space
-            k_func = dl.interpolate(k, Vk)
+            # # Interpolate onto the function space
+            # k_func = dl.interpolate(k, Vk)
             
-            plt.figure(figsize=(15,5))
-            nb.plot(mesh,subplot_loc=131, mytitle="Mesh", show_axis='on')
-            nb.plot(k_func ,subplot_loc=132, mytitle="k", show_axis='on')
-            #nb.plot(m_func,subplot_loc=133, mytitle="m")
-            plt.savefig("Mesh_k_m.png")
-            plt.close()
+            # Assuming Vk is the function space
+            k_func = dl.Function(Vk)  
+
+            # Get mesh node coordinates and DoF coordinates
+            mesh_coords = mesh.coordinates()
+            dof_coords = Vk.tabulate_dof_coordinates().reshape((-1, mesh.geometry().dim()))
+
+            # Round to avoid floating-point mismatches and create a dictionary
+            mesh_coord_map = {tuple(np.round(mesh_coords[i], decimals=10)): i for i in range(len(mesh_coords))}
+
+            # Find correct indices for DoF coordinates
+            correct_order = [mesh_coord_map[tuple(np.round(coord, decimals=10))] for coord in dof_coords]
+
+            # Reorder custom grid values
+            ordered_values = custom_grid_values[correct_order]
+            
+            # Assign reordered values
+            k_func.vector().set_local(ordered_values.detach().numpy())
+            
+            # plt.figure(figsize=(15,5))
+            # nb.plot(mesh,subplot_loc=131, mytitle="Mesh", show_axis='on')
+            # nb.plot(k_func ,subplot_loc=132, mytitle="k", show_axis='on')
+            # #nb.plot(m_func,subplot_loc=133, mytitle="m")
+            # plt.savefig("Mesh_k_m.png")
+            # plt.close()
             
             # ---------------- 3️⃣ Define the PDE Weak Formulation  ----------------
             # weak form for setting up the state equation
@@ -423,75 +453,277 @@ class MyModel(PyroModule):
                 dirichlet_dof_indices.update(bc.get_boundary_values().keys())
             
             
+
             ############################################################################
-            # Solve adjoint equation to get the adjoint matrix.
+            # Solve tangent equation to get the Sensitivity. 
             ############################################################################
-            a_adj = ufl.inner(k_func * ufl.grad(p_trial), ufl.grad(p_test)) * ufl.dx
-            L_adj = dl.Constant(0) * p_test * ufl.dx
+            S_solutions = []
+            #print(gradient_K_k.shape)
+            # #Get mesh node coordinates and DoF coordinates
             
+            mesh_coords = mesh.coordinates()
+            #print("mesh_coords" , mesh_coords.shape)
+            #print(mesh_coords)
+            dof_coords = Vu.tabulate_dof_coordinates().reshape((-1, mesh.geometry().dim()))
+            #print("dof_coords",dof_coords.shape)
+            #print(dof_coords)
             
-            adj_A, adj_b = dl.assemble_system (a_adj, L_adj, bc_adj)
+            # Round to avoid floating-point mismatches and create a dictionary
+            mesh_coord_map = {tuple(np.round(mesh_coords[i], decimals=10)): i for i in range(len(mesh_coords))}
+            correct_order = [mesh_coord_map[tuple(np.round(coord, decimals=10))] for coord in dof_coords]
             
-            adjoint_matrix = np.zeros_like(adj_A.array())
-            for i, x_0 in enumerate(Vu.tabulate_dof_coordinates()):
-                if i not in sorted(dirichlet_dof_indices): # check for non Boundary points
-                    adj_b[i] = -1
-                    p_sol = dl.Function(Vu)
-                    dl.solve (adj_A, p_sol.vector(), adj_b)
-                    #print(adj_b.get_local())
-                    adj_b[i] = 0
-                    adjoint_matrix[:,i] = p_sol.vector().get_local() 
+            #print(correct_order)
+            # print(gradient_K_k)
+            if rank ==0:
+                Sensitivty =[]
+            else:
+                Sensitivty = None
+                
+            comm.Barrier()
+            
+            for k in range(gradient_K_k.shape[0]):
+                # Convert column j of dK/dk into a FEniCS function
+                #k_grad_func = dl.Function(Vu)
+                # Sensitivity equation
+                dK_dk_fenics = dl.Function(Vu)
+                S = dl.TrialFunction(Vu)
+                w = dl.TestFunction(Vu)
+                # Reorder custom grid values
+
+                #Find correct indices for DoF coordinates
+                
+                ordered_values = gradient_K_k[k,:][correct_order]
+                #print(ordered_values)
+                #comm.Barrier()  
+                
+                dK_dk_fenics.vector().set_local(ordered_values.detach().numpy())
+                # print(ordered_values)
+                # comm.Barrier()
+                
+                # Interpolate onto the function space
+                # # Create an instance of the thermal conductivity function with custom grid values
+                #k_grad = ThermalConductivity(custom_grid_values=gradient_K_k[k,:], mesh=mesh, degree=0)
+                
+                
+                # Interpolate onto the function space
+                #k_grad_func = dl.interpolate(k_grad, Vu)
+        
+                a_S = dl.inner(k_func * dl.grad(S), dl.grad(w)) * dl.dx
+                #L_S = - dl.inner(k_grad_func * dl.grad(u), dl.grad(w)) * dl.dx
+                L_S = - dl.inner(dK_dk_fenics * dl.grad(u), dl.grad(w)) * dl.dx
+
+                S_sol = dl.Function(Vu)
+                dl.solve(a_S == L_S, S_sol, bc_tan)
+                
+                comm.Barrier()
+                # print("Process :", rank)
+                # Convert local solution to numpy array
+                local_values = S_sol.vector().get_local()
+    
+                # Gather sizes of all local solutions
+                sizes = comm.gather(len(local_values), root=0)
+                
+                if rank == 0:
+                    # Allocate space for full solution
+                    total_size = sum(sizes)
+                    full_sensitivty = np.zeros(total_size, dtype=np.float64)
+                   
+                else:
+                    full_sensitivty = None
+                
+                # Gather all local solutions
+                comm.Gatherv(sendbuf=local_values, recvbuf=(full_sensitivty, sizes), root=0)
+                
+                if rank == 0:
+                    #print("Full solution gathered:", full_sensitivty)
+                    Sensitivty.append(full_sensitivty)
                     
-            # Compute Darcy velocity v = -k ∇u
-            W = dl.VectorFunctionSpace(mesh, "CG", 1)  # Velocity space (vector field)
-            velocity = dl.project(- k_func * dl.grad(u), W)
-            # Extract components of velocity
-            v_x, v_y = velocity.split()  
+                
+                # Store solution for this parameter
+                #S_solutions.append(S_sol.vector().get_local())
+            #S_solutions = np.stack(S_solutions)
+            
+            
+            
+            # ############################################################################
+            # # Solve adjoint equation to get the adjoint matrix.
+            # ############################################################################
+            # a_adj = ufl.inner(k_func * ufl.grad(p_trial), ufl.grad(p_test)) * ufl.dx
+            # L_adj = dl.Constant(0) * p_test * ufl.dx
+            
+            
+            
+            # adj_A, adj_b = dl.assemble_system(a_adj, L_adj, bc_adj)
+            
+            # adjoint_matrix_1 = np.zeros_like(adj_A.array())
+            
+            # # for i, x_0 in enumerate(Vu.tabulate_dof_coordinates()):
+            # #     if i not in sorted(dirichlet_dof_indices): # check for non Boundary points
+            # #         adj_b[i] = -1
+            # #         p_sol = dl.Function(Vu)
+            # #         dl.solve (adj_A, p_sol.vector(), adj_b)
+            # #         #print(adj_b.get_local())
+            # #         adj_b[i] = 0
+            # #         adjoint_matrix_1[:,i] = p_sol.vector().get_local() 
+            
+            # Mass_matrix = dl.inner(u_trial, u_test) * dl.dx
+            # M_u = dl.assemble(Mass_matrix)
+            # # print(M_u.array())
+            
+            # # mesh_coords = mesh.coordinates()
+            # # #print(mesh_coords)
+            # # dof_coords = Vu.tabulate_dof_coordinates().reshape((-1, mesh.geometry().dim()))
+            # # #print(dof_coords)
+            # # # Round to avoid floating-point mismatches and create a dictionary
+            # # mesh_coord_map = {tuple(np.round(mesh_coords[i], decimals=10)): i for i in range(len(mesh_coords))}
+            # # correct_order = [mesh_coord_map[tuple(np.round(coord, decimals=10))] for coord in dof_coords]
+            # adjoint_matrix = np.zeros_like(adj_A.array())
+            # comm.Barrier()
+            # #print(adjoint_matrix.shape)
+            
+            # #column_identity = np.zeros_like(np.array(correct_order))
+            # # A = Identity[correct_order,:]
+            # # print(A)
+            
+            # # print(Vu.tabulate_dof_coordinates().shape)
+            # # # Find rows and columns that are NOT all zero
+            # # nonzero_rows = (A != 0).any(dim=1)  # Keep rows with at least one nonzero value
+            # # nonzero_cols = (A != 0).any(dim=0)  # Keep columns with at least one nonzero value
+
+            # # # Remove zero rows and columns
+            # # A_reduced = A[nonzero_rows][:, nonzero_cols]
+
+            # #print(A_reduced)
+            # #exit()
+            # for k, x_0 in enumerate(Vu.tabulate_dof_coordinates()):
+            # #for k, x_0 in enumerate(mesh.coordinates()):
+            #     #if i not in sorted(dirichlet_dof_indices): # check for non Boundary points
+                    
+            #         # b = ThermalConductivity(custom_grid_values=column_identity, mesh=mesh, degree=0)
+            #         # # Interpolate onto the function space
+            #         # b_func = dl.interpolate(b, Vu)
+            #         f = dl.Function(Vu)
+                    
+            #         #column_identity = - A[:,k]
+                    
+            #         p_sol = dl.Function(Vu)
+            #         #print(p_sol.vector().get_local())
+                    
+            #         f.vector()[k]=-1
+            #         #comm.Barrier()
+            #         #f.vector().set_local(column_identity.detach().numpy())
+                    
+            #         #print(correct_order)
+            #         #f.vector()[:]= column_identity[correct_order]
+                
+            #         #f.vector().apply("insert")
+            #         L_adj  = f * p_test  * ufl.dx
+            #         #L_adj  = b_func * p_test  * ufl.dx
+                    
+            #         adj_A, adj_b = dl.assemble_system (a_adj, L_adj, bc_adj)
+                    
+            #         dl.solve (adj_A, p_sol.vector(), adj_b)
+            #         #print(adj_b.get_local())
+            #         #adj_b[i] = 0
+            #         adjoint_matrix[:,k] = p_sol.vector().get_local() 
+            #         #column_identity[i] = 0
+            # # # Compute Darcy velocity v = -k ∇u
+            # # W = dl.VectorFunctionSpace(mesh, "CG", 1)  # Velocity space (vector field)
+            # # velocity = dl.project(- k_func * dl.grad(u), W)
+            # # # Extract components of velocity
+            # # v_x, v_y = velocity.split()  
             
         
-            plt.figure(figsize=(15,5))
-            #nb.plot(u,subplot_loc=121, mytitle="u(k_ini, m_ini)")
-            nb.plot(u,subplot_loc=131, mytitle="P(k_ini)")
-            #nb.plot(p,subplot_loc=142, mytitle="Adjoint")
-            nb.plot(v_x,subplot_loc=132, mytitle="v_x")
-            nb.plot(v_y,subplot_loc=133, mytitle="v_y")
-            # Adjust layout to prevent overlap
-            plt.savefig("plot_u_p_.png")
-            plt.close()
+            # # plt.figure(figsize=(15,5))
+            # # #nb.plot(u,subplot_loc=121, mytitle="u(k_ini, m_ini)")
+            # # nb.plot(u,subplot_loc=131, mytitle="P(k_ini)")
+            # # #nb.plot(p,subplot_loc=142, mytitle="Adjoint")
+            # # nb.plot(v_x,subplot_loc=132, mytitle="v_x")
+            # # nb.plot(v_y,subplot_loc=133, mytitle="v_y")
+            # # # Adjust layout to prevent overlap
+            # # plt.savefig("plot_u_p_.png")
+            # # plt.close()
             
-            # Sensitivity 
-            C_equ   = ufl.inner( k_trial * ufl.grad(u), ufl.grad(p_test)) * ufl.dx
-            # assemble matrix C
-            C =  dl.assemble(C_equ)
+            # # Sensitivity 
+            # C_equ   = ufl.inner( k_trial * ufl.grad(u), ufl.grad(p_test)) * ufl.dx
+            # # assemble matrix C
+            # C =  dl.assemble(C_equ)
 
-            M_equ   = ufl.inner(k_trial, k_test) * ufl.dx
-
-
-
-            # assemble matrix M
-            M = dl.assemble(M_equ)
-            M_u = dl.assemble(M_equ)
+            # M_equ = ufl.inner(k_trial, k_test) * ufl.dx
+            # M_ = ufl.inner(u_trial, u_test) * ufl.dx
+            # # assemble matrix M
+            # M_k = dl.assemble(M_equ)
+            # M_u = dl.assemble(M_)
 
 
             # C_ = C.array()[1:-1,1:-1]
-            J =   (C.array().T @ adjoint_matrix).T
+            # J =   (C.array().T @ adjoint_matrix_1).T
+            # #C_tilde = M_k.array() @ C.array() @ np.linalg.inv(M_u.array())
+            # ########check the Jacobian if it is correct or not #####
+            # # epsilon_data = np.array([1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0])
+            # # error_data = []
+            # # for i in range(len(epsilon_data)):
+            # #     error_data.append(perturbation(mesh=mesh, custom_grid_values=custom_grid_values, epsilon=epsilon_data[i], iteration=500, u_init=u, J_init=J))
+            # # plt.figure(figsize=(15,5))
+            # # plt.plot(np.log10(epsilon_data), np.log10(np.array(error_data)))
+            # # plt.xlabel("log10(epsilon)")
+            # # plt.ylabel("log10(error_norm_sum)")
+            # # plt.savefig("Test_Jacobain_matrix.png")
+            # # plt.close()
             
-            ########check the Jacobian if it is correct or not #####
-            # epsilon_data = np.array([1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0])
-            # error_data = []
-            # for i in range(len(epsilon_data)):
-            #     error_data.append(perturbation(mesh=mesh, custom_grid_values=custom_grid_values, epsilon=epsilon_data[i], iteration=500, u_init=u, J_init=J))
-            # plt.figure(figsize=(15,5))
-            # plt.plot(np.log10(epsilon_data), np.log10(np.array(error_data)))
-            # plt.xlabel("log10(epsilon)")
-            # plt.ylabel("log10(error_norm_sum)")
-            # plt.savefig("Test_Jacobain_matrix.png")
-            # plt.close()
+            # # Test_adjoint = adjoint_matrix_1 @ M_u.array() - adjoint_matrix
+            # # Test_adjoint[abs(Test_adjoint)< 1e-10] = 0
             
-            #G = np.linalg.solve(M_matrix, C_matrix.T @ P_matrix)
             
-            pyro.deterministic("grad_K_u", torch.tensor(J))  # Register y explicitly
-            pyro.deterministic("u", torch.tensor(u.vector().get_local()))  # Register y explicitly
+            
+            # J = np.linalg.solve(M_u.array(),  adjoint_matrix.T @ C.array())
+            # #J_tilde = np.linalg.solve(M_u.array().T,  J)
+            
+            # # pyro.deterministic("grad_K_u", torch.tensor(J))  # Register y explicitly
+            # # pyro.deterministic("u", torch.tensor(u.vector().get_local()))  # Register y explicitly
+            # # Convert local solution to numpy array
+            
+            comm.Barrier()
+            #print("Process :", rank)
+            # Convert local solution to numpy array
+            local_values = u.vector().get_local()
+            
+            # Gather sizes of all local solutions
+            sizes = comm.gather(len(local_values), root=0)
+            
+            if rank == 0:
+                # Allocate space for full solution
+                total_size = sum(sizes)
+                full_solution = np.zeros(total_size, dtype=np.float64)
+                
+            else:
+                full_solution = None
+                
+            
+            # Gather all local solutions
+            comm.Gatherv(sendbuf=local_values, recvbuf=(full_solution, sizes), root=0)
+            
+
+            if rank == 0:
+                # print("Full solution gathered:", full_solution)
+                Sensitivty = np.vstack(Sensitivty).T
+                #print(Sensitivty)
+                
+            #print(J)
+            #print(Sensitivty)
+            # print(correct_order)
+            # print(gradient_K_k.shape)
+            
+            # A = Sensitivty.T - J @ (gradient_K_k[:,correct_order]).detach().numpy().T
+            # A[abs(A)<1e-10] = 0.0
+            
+            # print(A)
+            # print(np.sum(A))
+            # comm.Barrier()
+            # exit()
+            
+            return full_solution, Sensitivty
+            #return torch.tensor(J) , torch.tensor(u.vector().get_local())
             
             #####################################TODO##########################################
             
