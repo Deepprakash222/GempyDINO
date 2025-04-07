@@ -1,5 +1,6 @@
 
 import torch
+import numpy as np
 from torch.autograd import grad
 import pyro
 import pyro.distributions as dist
@@ -20,6 +21,17 @@ class GempyModel(PyroModule):
         self.num_layers = num_layers
         self.dtype = dtype
         self.geo_model_test.interpolation_options.sigmoid_slope = 200
+        ###############################################################################
+        # Seed the randomness 
+        ###############################################################################
+        seed = 42           
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        # Ensure deterministic behavior
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        # Setting the seed for Pyro sampling
+        pyro.set_rng_seed(42)
         
     def create_sample(self):
         
@@ -91,9 +103,10 @@ class GempyModel(PyroModule):
         ######store the samples ######
         parameters=torch.hstack(samples_list) # (N, p) = number of sample X number of paramter
 
-        return parameters
+        return parameters.detach().numpy()
     
     def GenerateOutputSamples(self, Inputs_samples):
+        Inputs_samples = torch.tensor(Inputs_samples, dtype=self.dtype)
         m_true = []
         dmdc = []
         for i in range(Inputs_samples.shape[0]):
@@ -137,7 +150,7 @@ class GempyModel(PyroModule):
             m_true.append(m_samples)
         
         
-        return torch.stack(m_true) , torch.stack(dmdc)
+        return torch.stack(m_true).detach().numpy() , torch.stack(dmdc).detach().numpy()
 
 
     
