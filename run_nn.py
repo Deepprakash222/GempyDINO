@@ -375,7 +375,7 @@ def train_nn_with_different_nodes(nodes, cuttoff=None):
         outputs_NN = model(inputs)
         L_2_1 = L2_accuaracy(true_Data=output_PDE , nueral_network_output=outputs_NN)
         
-        print("L2 loss without Jacobian: ",L_2_1)
+        print("L2 accuaracy without Jacobian: ",L_2_1)
     ################################################################################
     # Find the result just based on L2 norm of output of NN and and reduced basis
     # and respespect to Derivative
