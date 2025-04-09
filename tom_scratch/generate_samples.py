@@ -7,9 +7,13 @@ import pyro.distributions as dist
 from pyro.infer import Predictive
 
 from pyro.nn import PyroModule, PyroSample
+
+import gempy as gp
 import gempy_engine
 from gempy_engine.core.backend_tensor import BackendTensor
-import gempy as gp
+
+from helpers import *
+import json
 
 class GempyModel(PyroModule):
     def __init__(self, interpolation_input_, geo_model_test, num_layers, dtype):
@@ -153,4 +157,41 @@ class GempyModel(PyroModule):
         return torch.stack(m_true).detach().numpy() , torch.stack(dmdc).detach().numpy()
 
 
+def generate_input_output_gempy_data(mesh_coordinates, number_samples,filename=None):
+    data ={}
+    geo_model_test = create_initial_gempy_model_3_layer(refinement=7, save=True)
+    if mesh_coordinates.shape[1]==2:
+        xyz_coord = np.insert(mesh_coordinates, 1, 0, axis=1)
+    elif mesh_coordinates.shape[1]==3:
+        xyz_coord = mesh_coordinates
+    gp.set_custom_grid(geo_model_test.grid, xyz_coord=xyz_coord)
+    geo_model_test.interpolation_options.mesh_extraction = False
+    
+    sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
+    ###############################################################################
+    # Make a list of gempy parameter which would be treated as a random variable
+    ###############################################################################
+    dtype =torch.float64
+    test_list=[]
+    test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype), "std":torch.tensor(0.06,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([4]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[4,2],dtype=dtype), "std":torch.tensor(0.06,dtype=dtype)}})
+
+    num_layers = len(test_list) # length of the list
+
+    Gempy = GempyModel(test_list, geo_model_test, num_layers, dtype=torch.float64)
+
+    c = Gempy.GenerateInputSamples(number_samples=number_samples)
+    m_data, dmdc_data = Gempy.GenerateOutputSamples(Inputs_samples=c)
+    data["input"] = c
+    data["Gempy_output"] = m_data
+    data["Jacobian_Gempy"] = dmdc_data
+    # Writing to a file
+    
+    if filename!=None:
+        with open(filename, 'w') as file:
+            json.dump(data, file)
+            
+    return data
+        
+    
     

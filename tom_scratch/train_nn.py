@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader, random_split
@@ -116,6 +117,15 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
+    ###############################################################################
+    # Seed the randomness 
+    ###############################################################################
+    seed = 42           
+    torch.manual_seed(seed)
+    # Ensure deterministic behavior
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
     ######################################################################################
     # Convert the dataset into pytorch tensor
     ######################################################################################
@@ -171,6 +181,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
     # Instantiate model
     ######################################################################################
     if network_type==None:
+        
         model = NeuralNet(layer_sizes=layer_sizes)
         model.to(device)
         
@@ -320,12 +331,12 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
             #jacobian_data, outputs_NN = jacobian_cal(inputs, model)
             outputs_NN = model(inputs)
             L_2 = L2_accuaracy(true_Data=output_PDE , nueral_network_output=outputs_NN)
-            print("L2 loss with Jacobian: ",L_2)
+            print("L2 accuracy with Jacobian: ",L_2)
             Jacobian_NN = calculate_jacobian_full(inputs, outputs_NN)
             Frobenius_norm = calulate_matrix_norm_square(output_grad_PDE, Jacobian_NN) 
             true_matrix_norm = torch.norm(output_grad_PDE, p='fro', dim=(1, 2))**2
             H1 = 1 - torch.sqrt(torch.mean((Frobenius_norm)/true_matrix_norm))
-            print("H1 Loss : ", H1)
+            print("H1 accuracy : ", H1)
             
     elif isinstance(network_type, int): 
          
@@ -340,7 +351,9 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
         F_2 = []
         a=1e0
         ran_size = int(network_type)
+        
         ran_iter = 5 * int(U.shape[0]/ran_size)
+        
         for epoch in range(num_epochs):
             model.train()  # Set model to training mode
             epoch_train_loss = 0
@@ -422,38 +435,38 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
                 
             model.eval()  # Set model to evaluation mode
     
-    for inputs, output_PDE , output_grad_PDE in test_loader:
-        inputs, output_PDE , output_grad_PDE = inputs.float().to(device), output_PDE.float().to(device) , output_grad_PDE.float().to(device)  # Ensure float32
-        inputs.requires_grad_(True)
-        #jacobian_data, outputs_NN = jacobian_cal(inputs, model)
-        outputs_NN = model(inputs)
-        L_2 = L2_accuaracy(true_Data=output_PDE , nueral_network_output=outputs_NN)
-        
-        print("L2 loss with Jacobian: ",L_2)
-        
-        norm = 0
-        for i in range(ran_iter):
+        for inputs, output_PDE , output_grad_PDE in test_loader:
+            inputs, output_PDE , output_grad_PDE = inputs.float().to(device), output_PDE.float().to(device) , output_grad_PDE.float().to(device)  # Ensure float32
+            inputs.requires_grad_(True)
+            #jacobian_data, outputs_NN = jacobian_cal(inputs, model)
+            outputs_NN = model(inputs)
+            L_2 = L2_accuaracy(true_Data=output_PDE , nueral_network_output=outputs_NN)
+            
+            print("L2 accuaracy with Jacobian: ",L_2)
+            
+            norm = 0
+            for i in range(ran_iter):
+                    
+                # Draw k numbers uniformly from {1, 2, ..., r}
+                k = torch.randperm(r)[:ran_size] #+ 1  # Add 1 to shift range from [0, r-1] to [1, r]
                 
-            # Draw k numbers uniformly from {1, 2, ..., r}
-            k = torch.randperm(r)[:ran_size] #+ 1  # Add 1 to shift range from [0, r-1] to [1, r]
-            
-            U_k = U[:,k]
-            
-            #V_k_tilde = V[:,k_tilde]
-            #Sigma_k = U_k.T @ U @ sigma_r @ V_k_tilde.T
-            U_k_T_nabla_q = torch.matmul(U_k.T, output_grad_PDE)
-            
-            grad_U_k_Output_NN = calculate_jacobian(U_k , inputs, outputs_NN)
-            #print(Sigma_k.shape, grad_U_k_Output_NN.shape, V_k_tilde.shape)
-            #output_final = final_output_batch( grad_U_k_Output_NN , V_k_tilde)
-            output_final = grad_U_k_Output_NN
-            #inputs = inputs.clone().detach().requires_grad_(True) 
-            
-            norm += calulate_matrix_norm_square(U_k_T_nabla_q, output_final) 
+                U_k = U[:,k]
                 
-        matrix_norm_expectation = (norm * r )/ (k.shape[0] * ran_iter)
-        #print(matrix_norm_expectation)
-        true_matrix_norm = torch.norm(output_grad_PDE, p='fro', dim=(1, 2))**2
-        #print(true_matrix_norm)
-        H1 = 1- torch.sqrt(torch.mean((matrix_norm_expectation)/true_matrix_norm))
-        print("H1 Loss : ", H1)
+                #V_k_tilde = V[:,k_tilde]
+                #Sigma_k = U_k.T @ U @ sigma_r @ V_k_tilde.T
+                U_k_T_nabla_q = torch.matmul(U_k.T, output_grad_PDE)
+                
+                grad_U_k_Output_NN = calculate_jacobian(U_k , inputs, outputs_NN)
+                #print(Sigma_k.shape, grad_U_k_Output_NN.shape, V_k_tilde.shape)
+                #output_final = final_output_batch( grad_U_k_Output_NN , V_k_tilde)
+                output_final = grad_U_k_Output_NN
+                #inputs = inputs.clone().detach().requires_grad_(True) 
+                
+                norm += calulate_matrix_norm_square(U_k_T_nabla_q, output_final) 
+                    
+            matrix_norm_expectation = (norm * r )/ (k.shape[0] * ran_iter)
+            #print(matrix_norm_expectation)
+            true_matrix_norm = torch.norm(output_grad_PDE, p='fro', dim=(1, 2))**2
+            #print(true_matrix_norm)
+            H1 = 1- torch.sqrt(torch.mean((matrix_norm_expectation)/true_matrix_norm))
+            print("H1 accuracy : ", H1)
