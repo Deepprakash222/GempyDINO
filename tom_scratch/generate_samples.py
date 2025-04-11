@@ -182,9 +182,9 @@ def generate_input_output_gempy_data(mesh_coordinates, number_samples,filename=N
 
     c = Gempy.GenerateInputSamples(number_samples=number_samples)
     m_data, dmdc_data = Gempy.GenerateOutputSamples(Inputs_samples=c)
-    data["input"] = c
-    data["Gempy_output"] = m_data
-    data["Jacobian_Gempy"] = dmdc_data
+    data["input"] = c.tolist()
+    data["Gempy_output"] = m_data.tolist()
+    data["Jacobian_Gempy"] = dmdc_data.tolist()
     # Writing to a file
     
     if filename!=None:

@@ -470,3 +470,4 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
             #print(true_matrix_norm)
             H1 = 1- torch.sqrt(torch.mean((matrix_norm_expectation)/true_matrix_norm))
             print("H1 accuracy : ", H1)
+            
