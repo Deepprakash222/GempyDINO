@@ -167,8 +167,8 @@ def main():
     
     
     # ---------------- 1️⃣ Create the Mesh ----------------
-    nx = 63
-    ny = 63
+    nx = 31
+    ny = 31
     nz = 7
     degree = 1
     mesh = dl.UnitSquareMesh(comm, nx, ny)
