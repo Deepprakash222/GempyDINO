@@ -36,6 +36,7 @@ from model import MyModel
 
 dtype = torch.float64
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cpu")
 #device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -167,8 +168,8 @@ def main():
     
     
     # ---------------- 1️⃣ Create the Mesh ----------------
-    nx = 31
-    ny = 31
+    nx = 63
+    ny = 63
     nz = 7
     degree = 1
     mesh = dl.UnitSquareMesh(comm, nx, ny)
@@ -337,7 +338,7 @@ def main():
         #dot = pyro.render_model(model.model_test, model_args=(test_list,geo_model_test,num_layers,mesh,degree, dtype),render_distributions=True,filename=filename_Bayesian_graph)
         dot = pyro.render_model(model.create_sample, model_args=(test_list,geo_model_test,num_layers,dtype))
         # Generate 50 samples
-        num_samples = 10000 # N
+        num_samples = 100 # N
         predictive = Predictive(model.create_sample, num_samples=num_samples)
         samples = predictive(test_list,geo_model_test,num_layers,dtype)
         

@@ -9,7 +9,7 @@
 ### You must at least specify minutes or days and hours and may add or
 ### leave out any other parameters
 
-#SBATCH --time=03:00:00
+#SBATCH --time=00:10:00
 
 ### Request all CPUs on one node
 #SBATCH --nodes=1
@@ -18,7 +18,7 @@
 #SBATCH --ntasks=32
 
 #SBATCH --cpus-per-task=1
-#SBATCH --gres=gpu:2
+
 
 ### Specify your mail address
 ###SBATCH --mail-user=deep.prakash.ravi@rwth-aachen.de
@@ -27,8 +27,9 @@
 
 ### Request memory you need for your job in MB
 #SBATCH --mem-per-cpu=4096M
-
+module load impi/2021.6.0
 
 source /home/jt925938/.bashrc
 conda activate gempy_dino
-python run.py
+
+mpirun -n 4 python run.py

@@ -3,13 +3,13 @@
 
 ### File / path where STDOUT will be written, the %J is the job id
 
-#SBATCH --output=./Results_%J.txt
+#SBATCH --output=../Results_%J.txt
 
 ### Request the time you need for execution. The full format is D-HH:MM:SS
 ### You must at least specify minutes or days and hours and may add or
 ### leave out any other parameters
 
-#SBATCH --time=03:00:00
+#SBATCH --time=05:00:00
 
 ### Request all CPUs on one node
 #SBATCH --nodes=1
@@ -18,7 +18,7 @@
 #SBATCH --ntasks=32
 
 #SBATCH --cpus-per-task=1
-#SBATCH --gres=gpu:2
+
 
 ### Specify your mail address
 ###SBATCH --mail-user=deep.prakash.ravi@rwth-aachen.de
@@ -31,4 +31,5 @@
 
 source /home/jt925938/.bashrc
 conda activate gempy_dino
-python run.py
+
+python save_gempy_data.py
