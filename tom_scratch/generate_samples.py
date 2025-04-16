@@ -12,6 +12,8 @@ import gempy as gp
 import gempy_engine
 from gempy_engine.core.backend_tensor import BackendTensor
 
+import dolfin as dl
+
 from helpers import *
 import json
 
@@ -157,7 +159,10 @@ class GempyModel(PyroModule):
         return torch.stack(m_true).detach().numpy() , torch.stack(dmdc).detach().numpy()
 
 
-def generate_input_output_gempy_data(mesh_coordinates, number_samples,filename=None):
+def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, filename=None):
+    
+    mesh_coordinates = mesh.coordinates()
+    global_indices = mesh.topology().global_indices(0)  # vertex global IDs
     data ={}
     geo_model_test = create_initial_gempy_model_3_layer(refinement=7, save=True)
     if mesh_coordinates.shape[1]==2:
@@ -179,19 +184,70 @@ def generate_input_output_gempy_data(mesh_coordinates, number_samples,filename=N
     num_layers = len(test_list) # length of the list
 
     Gempy = GempyModel(test_list, geo_model_test, num_layers, dtype=torch.float64)
-
-    c = Gempy.GenerateInputSamples(number_samples=number_samples)
-    m_data, dmdc_data = Gempy.GenerateOutputSamples(Inputs_samples=c)
-    data["input"] = c.tolist()
-    data["Gempy_output"] = m_data.tolist()
-    data["Jacobian_Gempy"] = dmdc_data.tolist()
-    # Writing to a file
+    comm.Barrier()
+    if comm.Get_rank()==0:
+        c = Gempy.GenerateInputSamples(number_samples=number_samples)
+        # print(c)
+        data["input"] = c.tolist()
+        
+    else:
+        c = None
     
-    if filename!=None:
-        with open(filename, 'w') as file:
-            json.dump(data, file)
-            
+    # Broadcast GemPy output to all ranks
+    c = comm.bcast(c, root=0)
+    m_data, dmdc_data = Gempy.GenerateOutputSamples(Inputs_samples=c)
+    
+    local_results = [(int(global_indices[idx]), m_data[:,idx], dmdc_data[:,idx]) for idx in range(global_indices.shape[0])]
+    comm.Barrier()
+    
+    all_results = comm.gather(local_results, root=0)
+    if comm.Get_rank() == 0:
+    # Initialize global output and gradient tensors
+        global_output = np.zeros((c.shape[0],nodes))
+        global_gradient = np.zeros((c.shape[0],nodes,num_layers))
+        for result_list in all_results:
+            for idx_, output_, grad_ in result_list:
+                global_output[:,idx_] = output_
+                global_gradient[:,idx_] = grad_
+        data["Gempy_output"] = global_output.tolist()
+        data["Jacobian_Gempy"] = global_gradient.tolist()
+    
+    return data
+    
+        
+def generate_input_output_gempy_data_(mesh, nodes, number_samples, filename=None):
+    
+    mesh_coordinates = mesh.coordinates()
+    
+    data ={}
+    geo_model_test = create_initial_gempy_model_3_layer(refinement=7, save=True)
+    if mesh_coordinates.shape[1]==2:
+        xyz_coord = np.insert(mesh_coordinates, 1, 0, axis=1)
+    elif mesh_coordinates.shape[1]==3:
+        xyz_coord = mesh_coordinates
+    gp.set_custom_grid(geo_model_test.grid, xyz_coord=xyz_coord)
+    geo_model_test.interpolation_options.mesh_extraction = False
+    
+    sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
+    ###############################################################################
+    # Make a list of gempy parameter which would be treated as a random variable
+    ###############################################################################
+    dtype =torch.float64
+    test_list=[]
+    test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype), "std":torch.tensor(0.06,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([4]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[4,2],dtype=dtype), "std":torch.tensor(0.06,dtype=dtype)}})
+
+    num_layers = len(test_list) # length of the list
+
+    Gempy = GempyModel(test_list, geo_model_test, num_layers, dtype=torch.float64)
+    
+    c = Gempy.GenerateInputSamples(number_samples=number_samples)
+        
+    m_data, dmdc_data = Gempy.GenerateOutputSamples(Inputs_samples=c)
+    
+    data["input"] = c
+    data["Gempy_output"] =m_data
+    data["Jacobian_Gempy"] = dmdc_data
     return data
         
-    
-    
+        
