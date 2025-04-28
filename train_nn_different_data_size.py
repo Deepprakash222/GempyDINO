@@ -15,7 +15,7 @@ from torch.utils.data import TensorDataset, DataLoader, random_split
 
 dtype = torch.float32
 import os
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+# os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 #define loss function
 
 def L2_accuaracy(true_Data, nueral_network_output):
@@ -103,8 +103,8 @@ def train_nn_with_different_nodes(training_data,nodes,  cuttoff=None):
     Nodes = nodes
     directory_path = directory_path+"/Nodes_"+str(Nodes)
     
-    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     
     print(device)
     
@@ -402,7 +402,7 @@ def train_nn_with_different_nodes(training_data,nodes,  cuttoff=None):
     F_2 = []
     a=1e0
     ran_iter = 10
-    ran_size = int(r/10)
+    ran_size = int(r/5)
     for epoch in range(num_epochs):
         model.train()  # Set model to training mode
         epoch_train_loss = 0
@@ -599,7 +599,7 @@ def train_nn_with_different_nodes(training_data,nodes,  cuttoff=None):
             
 def main():
     nodes = 4096
-    Training_data = [ 1024, 4096]
+    Training_data = [ 16,64,256,1024, 4096]
     L2_data =[]
     L2_Jabobian_data = []
     H1_data =[]
