@@ -37,6 +37,7 @@ class GempyModel(PyroModule):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         # Setting the seed for Pyro sampling
+        
         pyro.set_rng_seed(42)
         
     def create_sample(self):
@@ -199,7 +200,7 @@ def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, filename
     mesh_coordinates = mesh.coordinates()
     global_indices = mesh.topology().global_indices(0)  # vertex global IDs
     data ={}
-    geo_model_test = create_initial_gempy_model_3_layer(refinement=7, save=True)
+    geo_model_test = create_initial_gempy_model(refinement=7, save=True)
     if mesh_coordinates.shape[1]==2:
         xyz_coord = np.insert(mesh_coordinates, 1, 0, axis=1)
     elif mesh_coordinates.shape[1]==3:
@@ -213,9 +214,15 @@ def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, filename
     ###############################################################################
     dtype =torch.float64
     test_list=[]
-    test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype), "std":torch.tensor(0.06,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([4]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[4,2],dtype=dtype), "std":torch.tensor(0.06,dtype=dtype)}})
-
+    test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([2]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[2,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([3]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[3,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([6]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[6,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([7]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[7,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([8]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[8,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([11]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[11,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([12]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[12,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([13]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[13,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
     num_layers = len(test_list) # length of the list
 
     Gempy = GempyModel(test_list, geo_model_test, num_layers, dtype=torch.float64)
@@ -255,7 +262,7 @@ def generate_input_output_gempy_data_(mesh, nodes, number_samples, filename=None
     mesh_coordinates = mesh.coordinates()
     
     data ={}
-    geo_model_test = create_initial_gempy_model_3_layer(refinement=7, save=True)
+    geo_model_test = create_initial_gempy_model(refinement=7, save=True)
     if mesh_coordinates.shape[1]==2:
         xyz_coord = np.insert(mesh_coordinates, 1, 0, axis=1)
     elif mesh_coordinates.shape[1]==3:
@@ -264,13 +271,32 @@ def generate_input_output_gempy_data_(mesh, nodes, number_samples, filename=None
     geo_model_test.interpolation_options.mesh_extraction = False
     
     sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
+    #print(sp_coords_copy_test)
+    ################################################################################
+    # Store the Initial Interface data and orientation data
+    ################################################################################
+    df_sp_init = geo_model_test.surface_points.df
+    df_or_init = geo_model_test.orientations.df
+    
+    filename_initial_sp = "./Initial_sp.csv"
+    filename_initial_op = "./Initial_op.csv"
+    df_sp_init.to_csv(filename_initial_sp)
+    df_or_init.to_csv(filename_initial_op)
     ###############################################################################
     # Make a list of gempy parameter which would be treated as a random variable
     ###############################################################################
     dtype =torch.float64
     test_list=[]
-    test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype), "std":torch.tensor(0.06,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([4]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[4,2],dtype=dtype), "std":torch.tensor(0.06,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([2]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[2,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([3]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[3,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([6]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[6,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([7]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[7,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([8]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[8,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([11]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[11,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([12]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[12,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([13]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[13,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
+
 
     num_layers = len(test_list) # length of the list
 

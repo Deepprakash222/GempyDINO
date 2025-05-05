@@ -1,0 +1,2 @@
+/home/jt925938/anaconda3/envs/gempy_dino/lib/python3.10/site-packages/dolfin/jit/jit.py:121: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+  def compile_class(cpp_data, mpi_comm=MPI.comm_world):
