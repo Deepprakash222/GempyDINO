@@ -18,7 +18,7 @@ from helpers import *
 import json
 
 class GempyModel(PyroModule):
-    def __init__(self, interpolation_input_, geo_model_test, num_layers, dtype):
+    def __init__(self, interpolation_input_, geo_model_test, num_layers, slope, dtype):
         super(GempyModel, self).__init__()
         
         BackendTensor.change_backend_gempy(engine_backend=gp.data.AvailableBackends.PYTORCH)
@@ -26,7 +26,7 @@ class GempyModel(PyroModule):
         self.geo_model_test = geo_model_test
         self.num_layers = num_layers
         self.dtype = dtype
-        self.geo_model_test.interpolation_options.sigmoid_slope = 200
+        self.geo_model_test.interpolation_options.sigmoid_slope = slope
         ###############################################################################
         # Seed the randomness 
         ###############################################################################
@@ -40,6 +40,7 @@ class GempyModel(PyroModule):
         
         pyro.set_rng_seed(42)
         
+    
     def create_sample(self):
         
             """
@@ -195,7 +196,7 @@ class GempyModel(PyroModule):
         return torch.stack(m_true).detach().numpy() , torch.stack(dmdc).detach().numpy()
 
 
-def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, filename=None):
+def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, slope=200, filename=None):
     
     mesh_coordinates = mesh.coordinates()
     global_indices = mesh.topology().global_indices(0)  # vertex global IDs
@@ -225,7 +226,7 @@ def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, filename
     test_list.append({"update":"interface_data","id":torch.tensor([13]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[13,2],dtype=dtype), "std":torch.tensor(0.03,dtype=dtype)}})
     num_layers = len(test_list) # length of the list
 
-    Gempy = GempyModel(test_list, geo_model_test, num_layers, dtype=torch.float64)
+    Gempy = GempyModel(test_list, geo_model_test, num_layers, slope=slope,  dtype=torch.float64)
     comm.Barrier()
     if comm.Get_rank()==0:
         c = Gempy.GenerateInputSamples(number_samples=number_samples)
@@ -255,9 +256,27 @@ def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, filename
         data["Jacobian_Gempy"] = global_gradient.tolist()
     
     return data
+def create_true_data(mesh, nodes, slope=200, filename=None):
     
+    mesh_coordinates = mesh.coordinates()
+    data ={}
+    geo_model_test = create_initial_gempy_model(refinement=7, save=True)
+    if mesh_coordinates.shape[1]==2:
+        xyz_coord = np.insert(mesh_coordinates, 1, 0, axis=1)
+    elif mesh_coordinates.shape[1]==3:
+        xyz_coord = mesh_coordinates
+    gp.set_custom_grid(geo_model_test.grid, xyz_coord=xyz_coord)
+    geo_model_test.interpolation_options.mesh_extraction = False
+    sol = gp.compute_model(geo_model_test)
+    
+    geo_model_test.interpolation_options.sigmoid_slope = slope
+    gp.compute_model(geo_model_test)
+    sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
+    m_initial = geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
+    
+    return m_initial
         
-def generate_input_output_gempy_data_(mesh, nodes, number_samples, filename=None):
+def generate_input_output_gempy_data_(mesh, nodes, number_samples, slope=200, filename=None):
     
     mesh_coordinates = mesh.coordinates()
     
@@ -271,7 +290,8 @@ def generate_input_output_gempy_data_(mesh, nodes, number_samples, filename=None
     geo_model_test.interpolation_options.mesh_extraction = False
     
     sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
-    #print(sp_coords_copy_test)
+    # m_initial = geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
+    # print(m_initial)
     ################################################################################
     # Store the Initial Interface data and orientation data
     ################################################################################
@@ -300,7 +320,7 @@ def generate_input_output_gempy_data_(mesh, nodes, number_samples, filename=None
 
     num_layers = len(test_list) # length of the list
 
-    Gempy = GempyModel(test_list, geo_model_test, num_layers, dtype=torch.float64)
+    Gempy = GempyModel(test_list, geo_model_test, num_layers, slope, dtype=torch.float64)
     
     c = Gempy.GenerateInputSamples(number_samples=number_samples)
         
