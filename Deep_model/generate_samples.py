@@ -256,6 +256,7 @@ def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, slope=20
         data["Jacobian_Gempy"] = global_gradient.tolist()
     
     return data
+
 def create_true_data(mesh, nodes, slope=200, filename=None):
     
     mesh_coordinates = mesh.coordinates()
@@ -274,7 +275,7 @@ def create_true_data(mesh, nodes, slope=200, filename=None):
     sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
     m_initial = geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
     
-    return m_initial
+    return m_initial, sp_coords_copy_test
         
 def generate_input_output_gempy_data_(mesh, nodes, number_samples, slope=200, filename=None):
     
