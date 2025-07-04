@@ -18,13 +18,27 @@ warnings.filterwarnings("ignore")
 
 
 def main():
+    
+    
+    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        #device = torch.device("mps")
+        device = torch.device("cpu")
+        print("Using MPS device")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA device")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU device")
+    
     # Get the MPI communicator
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-        
+    
     
     print(f"Process {rank} of {size}")
+    
     # ---------------- 1️⃣ Create the Mesh ----------------
     nx = 31
     ny = 31
@@ -45,15 +59,15 @@ def main():
     comm.Barrier()
 
     
-    
-    data = generate_input_output_gempy_data(mesh=mesh,nodes=nodes, number_samples=1000, comm=comm)
+    data = generate_input_output_gempy_data(mesh=mesh,nodes=nodes, number_samples=2, comm=comm, device=device)
+    exit()
     comm.Barrier()
     if rank==0:
         filename = directory_path + "/data_9_parameter.json"
         c ,m_data, dmdc_data = np.array(data["input"]),np.array(data["Gempy_output"]), np.array(data["Jacobian_Gempy"])
         print("Shapes-" , "Gempy Input: ", c.shape, "Gempy Output:", m_data.shape, "Jacobian shape:", dmdc_data.shape)
-        with open(filename, 'w') as file:
-             json.dump(data, file)
+        # with open(filename, 'w') as file:
+        #      json.dump(data, file)
         
     
 

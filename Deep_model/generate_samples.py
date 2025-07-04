@@ -12,21 +12,23 @@ import gempy as gp
 import gempy_engine
 from gempy_engine.core.backend_tensor import BackendTensor
 
+
 import dolfin as dl
 
 from helpers import *
 import json
 
 class GempyModel(PyroModule):
-    def __init__(self, interpolation_input_, geo_model_test, num_layers, slope, dtype):
+    def __init__(self, interpolation_input_, geo_model_test, num_layers, slope, dtype, device):
         super(GempyModel, self).__init__()
-        
         BackendTensor.change_backend_gempy(engine_backend=gp.data.AvailableBackends.PYTORCH)
+        self.gempy_engine = gempy_engine
         self.interpolation_input_ = interpolation_input_
         self.geo_model_test = geo_model_test
         self.num_layers = num_layers
         self.dtype = dtype
         self.geo_model_test.interpolation_options.sigmoid_slope = slope
+        self.device = device
         ###############################################################################
         # Seed the randomness 
         ###############################################################################
@@ -112,71 +114,72 @@ class GempyModel(PyroModule):
         ######store the samples ######
         parameters=torch.hstack(samples_list) # (N, p) = number of sample X number of paramter
 
-        return parameters.detach().numpy()
+        return parameters.cpu().detach().numpy()
     
-    def GenerateOutputSamples(self, Inputs_samples):
-        Inputs_samples = torch.tensor(Inputs_samples, dtype=self.dtype)
-        m_true = []
-        dmdc = []
-        for i in range(Inputs_samples.shape[0]):
-            
-            list_paramter = [Inputs_samples[i,j].clone().requires_grad_(True) for j in range(Inputs_samples.shape[1])]
-            interpolation_input = self.geo_model_test.interpolation_input
-            
-            index=0
-            for interpolation_input_data in self.interpolation_input_[:self.num_layers]:
-                # Check which co-ordinates direction we wants to allow and modify the surface point data
-                if interpolation_input_data["direction"]=="X":
-                    interpolation_input.surface_points.sp_coords = torch.index_put(
-                        interpolation_input.surface_points.sp_coords,
-                        (torch.tensor([interpolation_input_data["id"]]), torch.tensor([0])),
-                        list_paramter[index])
-                elif interpolation_input_data["direction"]=="Y":
-                    interpolation_input.surface_points.sp_coords = torch.index_put(
-                        interpolation_input.surface_points.sp_coords,
-                        (torch.tensor([interpolation_input_data["id"]]), torch.tensor([1])),
-                        list_paramter[index])
-                elif interpolation_input_data["direction"]=="Z":
-                    interpolation_input.surface_points.sp_coords = torch.index_put(
-                        interpolation_input.surface_points.sp_coords,
-                        (interpolation_input_data["id"], torch.tensor([2])),
-                        list_paramter[index])
-                    
-                else:
-                    print("Wrong direction")
+    def GempyForward(self, *params):
+        index=0
+        interpolation_input = self.geo_model_test.interpolation_input
+        
+        
+        for interpolation_input_data in self.interpolation_input_[:self.num_layers]:
+            # Check which co-ordinates direction we wants to allow and modify the surface point data
+            if interpolation_input_data["direction"]=="X":
+                interpolation_input.surface_points.sp_coords = torch.index_put(
+                    interpolation_input.surface_points.sp_coords,
+                    (torch.tensor([interpolation_input_data["id"]]), torch.tensor([0])),
+                    params[index])
+            elif interpolation_input_data["direction"]=="Y":
+                interpolation_input.surface_points.sp_coords = torch.index_put(
+                    interpolation_input.surface_points.sp_coords,
+                    (torch.tensor([interpolation_input_data["id"]]), torch.tensor([1])),
+                    params[index])
+            elif interpolation_input_data["direction"]=="Z":
+                interpolation_input.surface_points.sp_coords = torch.index_put(
+                    interpolation_input.surface_points.sp_coords,
+                    (interpolation_input_data["id"], torch.tensor([2])),
+                    params[index])
                 
-                index=index+1
+            else:
+                print("Wrong direction")
             
-            self.geo_model_test.solutions = gempy_engine.compute_model(
-                        interpolation_input=interpolation_input,
-                        options=self.geo_model_test.interpolation_options,
-                        data_descriptor=self.geo_model_test.input_data_descriptor,
-                        geophysics_input=self.geo_model_test.geophysics_input,
-                    )
-            
-            # Compute and observe the thickness of the geological layer
+            index=index+1
         
-            m_samples = self.geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
-            grad_K_k =torch.zeros(( Inputs_samples.shape[1], m_samples.shape[0]),dtype=self.dtype)
-            
-            for k in range(len(list_paramter)):
-                for j in range(m_samples.shape[0]):
-                    y_x = grad(m_samples[j], list_paramter[k],  retain_graph=True)
-                    grad_K_k[k,j] = y_x[0]
-            
-            dmdc.append(grad_K_k.T)
-            m_true.append(m_samples)
+        self.geo_model_test.solutions = self.gempy_engine.compute_model(
+                    interpolation_input=interpolation_input,
+                    options=self.geo_model_test.interpolation_options,
+                    data_descriptor=self.geo_model_test.input_data_descriptor,
+                    geophysics_input=self.geo_model_test.geophysics_input,
+                )
         
+        # Compute and observe the thickness of the geological layer
+    
+        m_samples = self.geo_model_test.solutions.octrees_output[0].last_output_center.custom_grid_values
+        return m_samples
+    
+    def GenerateOutputSamples_(self, Inputs_samples):
+        from torch.autograd.functional import jacobian
         
-        return torch.stack(m_true).detach().numpy() , torch.stack(dmdc).detach().numpy()
+        Inputs_samples = torch.tensor(Inputs_samples, dtype=self.dtype, device=self.device)
+        m_data =[]
+        dmdc_data =[]
+        for i in range(Inputs_samples.shape[0]):
+            params_tuple = tuple([Inputs_samples[i,j].clone().requires_grad_(True) for j in range(Inputs_samples.shape[1])])
+            m_samples = self.GempyForward(*params_tuple)
+            m_data.append(m_samples)
+            J = jacobian(self.GempyForward, params_tuple)
+            J_matrix = torch.tensor([[J[j][i] for j in range(len(J))] for i in  range(J[0].shape[0])])
+            dmdc_data.append(J_matrix)
+        
+        return torch.stack(m_data).detach().numpy() , torch.stack(dmdc_data).detach().numpy()
 
 
-def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, slope=200, filename=None):
+def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, device, slope=200, filename=None):
     
     mesh_coordinates = mesh.coordinates()
+    
     global_indices = mesh.topology().global_indices(0)  # vertex global IDs
     data ={}
-    geo_model_test = create_initial_gempy_model(refinement=7, save=True)
+    geo_model_test = create_initial_gempy_model(refinement=3, save=True)
     if mesh_coordinates.shape[1]==2:
         xyz_coord = np.insert(mesh_coordinates, 1, 0, axis=1)
     elif mesh_coordinates.shape[1]==3:
@@ -185,24 +188,27 @@ def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, slope=20
     geo_model_test.interpolation_options.mesh_extraction = False
     
     sp_coords_copy_test = geo_model_test.interpolation_input.surface_points.sp_coords.copy()
+    
     ###############################################################################
     # Make a list of gempy parameter which would be treated as a random variable
     ###############################################################################
     dtype =torch.float64
     test_list=[]
-    std = 0.125
-    test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([2]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[2,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([3]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[3,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([6]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[6,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([7]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[7,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([8]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[8,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([11]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[11,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([12]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[12,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-    test_list.append({"update":"interface_data","id":torch.tensor([13]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[13,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
+    std = 0.03  # 0.125 , 4*std = gap between two layers
+    test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([2]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[2,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([3]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[3,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([6]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[6,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([7]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[7,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([8]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[8,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([11]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[11,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([12]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[12,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
+    test_list.append({"update":"interface_data","id":torch.tensor([13]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[13,2],dtype=dtype, device=device), "std":torch.tensor(std,dtype=dtype, device=device)}})
     num_layers = len(test_list) # length of the list
-
-    Gempy = GempyModel(test_list, geo_model_test, num_layers, slope=slope,  dtype=torch.float64)
+    
+    
+    Gempy = GempyModel(test_list, geo_model_test, num_layers, slope=slope,  dtype=dtype, device=device)
+    
     comm.Barrier()
     if comm.Get_rank()==0:
         c = Gempy.GenerateInputSamples(number_samples=number_samples)
@@ -213,9 +219,12 @@ def generate_input_output_gempy_data(mesh, nodes, number_samples, comm, slope=20
         c = None
     
     # Broadcast GemPy output to all ranks
-    c = comm.bcast(c, root=0)
-    m_data, dmdc_data = Gempy.GenerateOutputSamples(Inputs_samples=c)
     
+    c = comm.bcast(c, root=0)
+    
+    #m_data, dmdc_data = Gempy.GenerateOutputSamples(Inputs_samples=c)
+    m_data, dmdc_data = Gempy.GenerateOutputSamples_(Inputs_samples=c)
+   
     local_results = [(int(global_indices[idx]), m_data[:,idx], dmdc_data[:,idx]) for idx in range(global_indices.shape[0])]
     comm.Barrier()
     
@@ -237,7 +246,7 @@ def create_true_data(mesh, nodes, slope=200, filename=None):
     
     mesh_coordinates = mesh.coordinates()
     data ={}
-    geo_model_test = create_initial_gempy_model(refinement=7, save=True)
+    geo_model_test = create_initial_gempy_model(refinement=3, save=True)
     if mesh_coordinates.shape[1]==2:
         xyz_coord = np.insert(mesh_coordinates, 1, 0, axis=1)
     elif mesh_coordinates.shape[1]==3:
@@ -301,7 +310,7 @@ def generate_input_output_gempy_data_(mesh, nodes, number_samples, slope=200, fi
     mesh_coordinates = mesh.coordinates()
     
     data ={}
-    geo_model_test = create_initial_gempy_model(refinement=7, save=True)
+    geo_model_test = create_initial_gempy_model(refinement=3, save=True)
     if mesh_coordinates.shape[1]==2:
         xyz_coord = np.insert(mesh_coordinates, 1, 0, axis=1)
     elif mesh_coordinates.shape[1]==3:
@@ -327,7 +336,7 @@ def generate_input_output_gempy_data_(mesh, nodes, number_samples, slope=200, fi
     ###############################################################################
     dtype =torch.float64
     test_list=[]
-    std = 0.125
+    std = 0.03  # 0.125 , 4*std = gap between two layers
     test_list.append({"update":"interface_data","id":torch.tensor([1]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[1,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
     test_list.append({"update":"interface_data","id":torch.tensor([2]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[2,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
     test_list.append({"update":"interface_data","id":torch.tensor([3]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[3,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
@@ -337,19 +346,18 @@ def generate_input_output_gempy_data_(mesh, nodes, number_samples, slope=200, fi
     test_list.append({"update":"interface_data","id":torch.tensor([11]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[11,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
     test_list.append({"update":"interface_data","id":torch.tensor([12]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[12,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
     test_list.append({"update":"interface_data","id":torch.tensor([13]), "direction":"Z", "prior_distribution":"normal","normal":{"mean":torch.tensor(sp_coords_copy_test[13,2],dtype=dtype), "std":torch.tensor(std,dtype=dtype)}})
-
-
+    
     num_layers = len(test_list) # length of the list
 
     Gempy = GempyModel(test_list, geo_model_test, num_layers, slope, dtype=torch.float64)
     
     c = Gempy.GenerateInputSamples(number_samples=number_samples)
-        
-    m_data, dmdc_data = Gempy.GenerateOutputSamples(Inputs_samples=c)
+    exit()
+    m_data, dmdc_data = Gempy.GenerateOutputSamples_(Inputs_samples=c)
     
     data["input"] = c
     data["Gempy_output"] =m_data
     data["Jacobian_Gempy"] = dmdc_data
     return data
-        
+    
         

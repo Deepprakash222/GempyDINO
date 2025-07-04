@@ -24,7 +24,8 @@ def build_network(layer_sizes):
     for i in range(len(layer_sizes) - 1):
         layers.append(nn.Linear(layer_sizes[i], layer_sizes[i + 1]))  # Fully connected layer
         if i < len(layer_sizes) - 2:  # No activation for last layer
-            layers.append(nn.ReLU())  # Activation function (can be modified)
+            #layers.append(nn.ReLU())  # Activation function (can be modified)
+            layers.append(nn.Tanh())
     
     return nn.Sequential(*layers)
 
@@ -92,7 +93,9 @@ def custom_loss_without_grad(output_PDE, outputs_NN):
     """
     
     N, D = outputs_NN.shape 
-    l2_norm = torch.norm(output_PDE - outputs_NN, p=2, dim=1) ** 2  # Squared L2 norm for each sample
+    delta = output_PDE - outputs_NN
+    
+    l2_norm = torch.norm(delta, p=2, dim=1) ** 2  # Squared L2 norm for each sample
     
     total_loss = torch.sum(l2_norm) /N #(N*D)  # Sum over all N samples (N *D)
     return total_loss
@@ -262,7 +265,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
     ######################################################################################
     if network_type==None:
         
-        model = NeuralNet(layer_sizes=layer_sizes)
+        model = NeuralNet(layer_sizes=layer_sizes).to(dtype=dtype)
         model.to(device)
         
         optimizer = optim.Adam(model.parameters(), lr=0.002)
@@ -279,7 +282,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
             epoch_train_loss = 0
 
             for inputs, output_PDE , output_grad_PDE in train_loader:
-                inputs, output_PDE , output_grad_PDE = inputs.float().to(device), output_PDE.float().to(device) , output_grad_PDE.float().to(device)  # Ensure float32
+                inputs, output_PDE , output_grad_PDE = inputs.to(device), output_PDE.to(device) , output_grad_PDE.to(device)  # Ensure float32
                 optimizer.zero_grad()
                 outputs_NN = model(inputs)  # Forward pass
                 loss = custom_loss_without_grad(output_PDE, outputs_NN) 
@@ -298,7 +301,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
 
             with torch.no_grad():
                 for inputs, output_PDE , output_grad_PDE in valid_loader:
-                    inputs, output_PDE , output_grad_PDE = inputs.float().to(device), output_PDE.float().to(device) , output_grad_PDE.float().to(device)  # Ensure float32
+                    inputs, output_PDE , output_grad_PDE = inputs.to(device), output_PDE.to(device) , output_grad_PDE.to(device)  # Ensure float32
                     outputs_NN = model(inputs)
                     loss = custom_loss_without_grad(output_PDE, outputs_NN)
                     epoch_val_loss += loss.item()
@@ -317,11 +320,17 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
         model.eval()  # Set model to evaluation mode
         
         for inputs, output_PDE , output_grad_PDE in test_loader:
-            inputs, output_PDE , output_grad_PDE = inputs.float().to(device), output_PDE.float().to(device) , output_grad_PDE.float().to(device)  # Ensure float32
+            inputs, output_PDE , output_grad_PDE = inputs.to(device), output_PDE.to(device) , output_grad_PDE.to(device)  # Ensure float32
             inputs.requires_grad_(True)
             outputs_NN = model(inputs)
             L_2_1 = L2_accuracy(true_Data=output_PDE , nueral_network_output=outputs_NN)
             print("L2 accuracy without Jacobian: ",L_2_1)
+            
+            Jacobian_NN = calculate_jacobian_full(inputs, outputs_NN)
+            Frobenius_norm = calulate_matrix_norm_square(output_grad_PDE, Jacobian_NN) 
+            true_matrix_norm = torch.norm(output_grad_PDE, p='fro', dim=(1, 2))**2
+            H1 = 1 - torch.sqrt(torch.sum((Frobenius_norm)/true_matrix_norm))
+            print("H1 accuracy : ", H1)
             
         torch.save(model, "./saved_model/model_without_jacobian.pth")
     ################################################################################
@@ -331,7 +340,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
     ################################################################################
     # Instantiate model
     elif network_type=="full":
-        model = NeuralNet(layer_sizes=layer_sizes)
+        model = NeuralNet(layer_sizes=layer_sizes).to(dtype=dtype)
         model.to(device)
         optimizer = optim.Adam(model.parameters(), lr=0.002)
         train_losses = []
@@ -347,7 +356,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
             epoch_F2_loss = 0
 
             for inputs, output_PDE , output_grad_PDE in train_loader:
-                inputs, output_PDE , output_grad_PDE = inputs.float().to(device), output_PDE.float().to(device) , output_grad_PDE.float().to(device)  # Ensure float32
+                inputs, output_PDE , output_grad_PDE = inputs.to(device), output_PDE.to(device) , output_grad_PDE.to(device)  # Ensure float32
                 optimizer.zero_grad()
                 # 🔥 Ensure inputs track gradients before computing Jacobian
                 inputs.requires_grad_(True)
@@ -379,7 +388,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
 
             #with torch.no_grad():
             for inputs, output_PDE , output_grad_PDE in valid_loader:
-                inputs, output_PDE , output_grad_PDE = inputs.float().to(device), output_PDE.float().to(device) , output_grad_PDE.float().to(device)  # Ensure float32
+                inputs, output_PDE , output_grad_PDE = inputs.to(device), output_PDE.to(device) , output_grad_PDE.to(device)  # Ensure float32
                 inputs.requires_grad_(True)
                 outputs_NN = model(inputs)
                 L_2_loss = custom_loss_without_grad(output_PDE, outputs_NN)/2
@@ -405,7 +414,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
         model.eval()  # Set model to evaluation mode
     
         for inputs, output_PDE , output_grad_PDE in test_loader:
-            inputs, output_PDE , output_grad_PDE = inputs.float().to(device), output_PDE.float().to(device) , output_grad_PDE.float().to(device)  # Ensure float32
+            inputs, output_PDE , output_grad_PDE = inputs.to(device), output_PDE.to(device) , output_grad_PDE.to(device)  # Ensure float32
             inputs.requires_grad_(True)
            
             outputs_NN = model(inputs)
@@ -414,7 +423,7 @@ def train_network(Gempy_Inputs, PDE_outputs, Jacobian, layer_sizes, num_epochs, 
             Jacobian_NN = calculate_jacobian_full(inputs, outputs_NN)
             Frobenius_norm = calulate_matrix_norm_square(output_grad_PDE, Jacobian_NN) 
             true_matrix_norm = torch.norm(output_grad_PDE, p='fro', dim=(1, 2))**2
-            H1 = 1 - torch.sqrt(torch.mean((Frobenius_norm)/true_matrix_norm))
+            H1 = 1 - torch.sqrt(torch.sum((Frobenius_norm)/true_matrix_norm))
             print("H1 accuracy : ", H1)
             
         torch.save(model, "./saved_model/model_jacobian_full.pth")

@@ -1,0 +1,10 @@
+,mean,std,median,5.0%,95.0%,n_eff,r_hat
+mu_1,tensor(0.2512),tensor(0.0080),tensor(0.2512),tensor(0.2380),tensor(0.2645),tensor(79.8442),tensor(1.0772)
+mu_2,tensor(0.2576),tensor(0.0066),tensor(0.2577),tensor(0.2470),tensor(0.2682),tensor(100.0837),tensor(1.0297)
+mu_3,tensor(0.2315),tensor(0.0075),tensor(0.2314),tensor(0.2196),tensor(0.2436),tensor(67.3816),tensor(1.0918)
+mu_4,tensor(0.1388),tensor(0.0110),tensor(0.1387),tensor(0.1204),tensor(0.1571),tensor(135.1581),tensor(1.0420)
+mu_5,tensor(0.1619),tensor(0.0132),tensor(0.1619),tensor(0.1407),tensor(0.1834),tensor(118.3766),tensor(1.0182)
+mu_6,tensor(0.1350),tensor(0.0115),tensor(0.1358),tensor(0.1170),tensor(0.1531),tensor(81.0756),tensor(1.1009)
+mu_7,tensor(0.0095),tensor(0.0185),tensor(0.0089),tensor(-0.0202),tensor(0.0403),tensor(119.2776),tensor(1.0205)
+mu_8,tensor(0.0147),tensor(0.0210),tensor(0.0128),tensor(-0.0188),tensor(0.0451),tensor(42.1165),tensor(1.1325)
+mu_9,tensor(0.0041),tensor(0.0179),tensor(0.0031),tensor(-0.0241),tensor(0.0350),tensor(107.4004),tensor(1.0367)

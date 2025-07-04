@@ -100,7 +100,7 @@ def create_initial_gempy_model(refinement, filename='prior_model.png', save=True
     # geo_model_test.structural_frame.structural_groups[0].elements[1], geo_model_test.structural_frame.structural_groups[0].elements[0]
 
     gp.compute_model(geo_model_test)
-    picture_test = gpv.plot_2d(geo_model_test, cell_number=5, legend='force')
+    #picture_test = gpv.plot_2d(geo_model_test, cell_number=5, legend='force')
     # if False:
     #     plt.show()
     # if save:
