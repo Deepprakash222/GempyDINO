@@ -1,0 +1,5 @@
+,mean,std,median,5.0%,95.0%,n_eff,r_hat
+mu_1,tensor(0.0864),tensor(0.0015),tensor(0.0863),tensor(0.0838),tensor(0.0887),tensor(1300.7429),tensor(1.0015)
+mu_2,tensor(0.0823),tensor(0.0017),tensor(0.0824),tensor(0.0794),tensor(0.0849),tensor(1260.5874),tensor(1.0010)
+mu_3,tensor(0.0845),tensor(0.0016),tensor(0.0846),tensor(0.0817),tensor(0.0872),tensor(1182.7826),tensor(1.0027)
+mu_4,tensor(-0.1310),tensor(0.0048),tensor(-0.1310),tensor(-0.1389),tensor(-0.1232),tensor(805.2424),tensor(1.0028)
