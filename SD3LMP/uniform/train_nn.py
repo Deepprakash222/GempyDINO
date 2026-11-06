@@ -460,7 +460,7 @@ class NN_setup():
                     epoch_val_loss += loss.item()
                     
             # Compute average validation loss
-            epoch_val_loss /= len(self.test_loader)
+            epoch_val_loss /= len(self.valid_loader)
             val_losses.append(epoch_val_loss)
 
             # Print progress every 10 epochs

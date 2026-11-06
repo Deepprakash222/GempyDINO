@@ -1,5 +1,5 @@
 ,mean,std,median,5.0%,95.0%,n_eff,r_hat
-mu_1,tensor(0.0864),tensor(0.0015),tensor(0.0863),tensor(0.0838),tensor(0.0887),tensor(1300.7429),tensor(1.0015)
-mu_2,tensor(0.0823),tensor(0.0017),tensor(0.0824),tensor(0.0794),tensor(0.0849),tensor(1260.5874),tensor(1.0010)
-mu_3,tensor(0.0845),tensor(0.0016),tensor(0.0846),tensor(0.0817),tensor(0.0872),tensor(1182.7826),tensor(1.0027)
-mu_4,tensor(-0.1310),tensor(0.0048),tensor(-0.1310),tensor(-0.1389),tensor(-0.1232),tensor(805.2424),tensor(1.0028)
+mu_1,tensor(0.0851),tensor(0.0126),tensor(0.0842),tensor(0.0643),tensor(0.1028),tensor(1299.9724),tensor(1.0024)
+mu_2,tensor(0.0792),tensor(0.0096),tensor(0.0791),tensor(0.0639),tensor(0.0962),tensor(1448.1927),tensor(1.0006)
+mu_3,tensor(0.0744),tensor(0.0109),tensor(0.0752),tensor(0.0570),tensor(0.0920),tensor(1620.4619),tensor(1.0002)
+mu_4,tensor(0.0186),tensor(0.0418),tensor(0.0101),tensor(-0.0465),tensor(0.0820),tensor(1273.9572),tensor(1.0011)

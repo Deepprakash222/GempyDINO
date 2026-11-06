@@ -64,21 +64,14 @@ def pyro_model(interpolation_input_ ,num_layers, NN_model,Interpolation_matrix, 
                 
                 counter=counter+1
              
-            input_data = torch.tensor(parameter, device=device)
+            #input_data = torch.tensor(parameter, device=device)
+            input_data = torch.stack(parameter)
+            
             NN_model.eval()
             NN_output = NN_model(input_data)
             output =torch.matmul(Interpolation_matrix, torch.matmul(NN_output, phi.T) + u_shift)
             
-            # mean = output
-            # cov_matrix = Sigma_l
-            # r = obs_data - mean
             
-            # Sigma_r = torch.linalg.pinv(cov_matrix) @ r
-            
-            # r_T_Sigma_inv_r = torch.dot(r, Sigma_r)
-            # log_likelihood = - 0.5 * r_T_Sigma_inv_r  
-            
-            # pyro.factor("log_likelihood",  log_likelihood)
             with pyro.plate("likelihood", obs_data.shape[0]):
                 pyro.sample("obs", dist.Normal(output, beta), obs=obs_data).to(device)
             
@@ -163,7 +156,6 @@ def main():
     M_U = dl.assemble(dl.inner(u_trial,u_test)*dl.dx)
 
     I_U = hf.StateSpaceIdentityOperator(M_U)
-    #observable = hf.LinearStateObservable(pde,M_U)
     observable_1 = hf.LinearStateObservable(pde,I_U)
     observable_2 = hf.LinearStateObservable(pde,B)
 
@@ -174,13 +166,13 @@ def main():
     M_M = dl.assemble(dl.inner(m_trial,m_test)*dl.dx)
     
     # noise level
-    noise_level = 0.01
+    noise_level = 0.05
     
-    shift = np.array([0,0,0,-0.06]) #0.15
+    #shift = np.array([0,0,0,-0.06]) #0.15
     #shift = np.array([0,0,0,-0.08333333 * 0.5]) #0.2
     #shift = np.array([0,0,0,0]) #0.3
     #shift = np.array([0,0,0,0.08333333 * 0.5]) #0.4
-    #shift = np.array([0,0,0,0.06]) # 0.45
+    shift = np.array([0,0,0,0.06]) # 0.45
         
     m_initial, dmdk, sp_coords_copy_test, gempy_model= create_true_data(mesh=mesh, shift=shift, nodes=nodes, filename=None)
         
@@ -253,9 +245,6 @@ def main():
     for component in range(dmdk.shape[1]):
         m_nodes_hat.vector().set_local(dmdk[:,component][d2v]) 
         Jm_1.mult(m_nodes_hat.vector(), uhat.vector()) 
-        # Multiply dmdc by Mass matrix.
-        # M_M.mult(m_nodes_hat.vector(), m_hat.vector()) 
-        # Jm.mult(m_hat.vector(),uhat.vector()) 
         Jacobian_true_1[:,component] = uhat.vector().get_local()
     u_ob_2  = observable_2.evalu(x[hp.STATE]).get_local()
     
@@ -275,7 +264,6 @@ def main():
     
     u_data = B.array() @ u_true
     A = u_obs - u_data
-    #A = u_obs - u_true
     A[np.abs(A)<1e-10]=0
     print(np.sum(A))
     
@@ -287,11 +275,7 @@ def main():
     M_obs = B_pesudo_inverse.T @ M_U.array() @ B_pesudo_inverse
     print("M_obs.shape:", M_obs.shape)
     
-    #M_obs = M_U.array()
     
-    
-
-
     ud = dl.Function(Vh[hp.STATE])
     ud.assign(u)
 
@@ -331,18 +315,14 @@ def main():
     print("trace of M_obs:", trace)
     
     beta = std_dev #* np.sqrt(u_M_norm /M_obs.shape[0]) 
-    #alpha = 0.05 #* np.sqrt(u_M_norm /trace) 
-    # print("eigenvalues of Sigma_l:", np.linalg.eigvals(Sigma_l))
     Sigma_l = (beta**2) * np.eye(M_obs.shape[0])
-    #Sigma_l = beta**2 *  np.linalg.pinv(M_obs)
     
     u_noisy = np.random.multivariate_normal(
     mean=u_obs,
     cov=Sigma_l)
     #u_obs =u_noisy
     print("||del u||:", np.linalg.norm(u_obs- u_noisy) / np.linalg.norm(u_obs))
-    #exit()
-    #Sigma_l = alpha**2 *  np.linalg.pinv(M_obs) * (u_M_norm /M_obs.shape[0])
+
     u_obs = u_noisy
     Sigma_l = torch.tensor(Sigma_l, dtype=torch.float32, device=device)
     
@@ -355,16 +335,8 @@ def main():
     
     
     Interpolation_matrix = torch.tensor(B.array(), dtype=dtype, device=device)
-    #Interpolation_matrix = torch.tensor(np.eye(u_true.shape[0]), dtype=dtype, device=device)
     
-    
-    #model_jacobian_full = torch.load("./saved_model/model_without_jacobian_8192_250.pth",map_location=device, weights_only=False)
     model_jacobian_full = torch.load("./saved_model/model_jacobian_full_8192_250.pth",map_location=device, weights_only=False)
-    #model_jacobian_full = torch.load("./saved_model/model_jacobian_full_8192_500.pth",map_location=device, weights_only=False)
-    #model_jacobian_full = torch.load("./saved_model/model_without_jacobian_8192_500.pth",map_location=device, weights_only=False)
-    
-    
-    #compute_gradient(neural_network = model_jacobian_full,Decoder_matrix=phi_r,Encoder_matrix= Mphi_r, bias=u_shift, d = u_obs, interpolation_matrix=Interpolation_matrix, Noise_cov=Sigma_l,Sigma_p=Sigma_l )
     
     ###############################################################################
     # Make a list of gempy parameter which would be treated as a random variable
@@ -493,11 +465,11 @@ def main():
     
     beta =  beta
     output2 = torch.tensor(u_obs_2, dtype=dtype)
-    #Sigma_post = torch.linalg.inv( torch.linalg.inv(Sigma_p) + Jacobian.T @ torch.linalg.inv(Sigma_l) @ Jacobian)
+    
     Sigma_post = torch.linalg.inv( torch.linalg.inv(Sigma_p) + (Jacobian.T  @ Jacobian) / (beta**2) )
-    #mu_post  = mu_0 + Sigma_post @ Jacobian.T @ torch.linalg.inv(Sigma_l) @ (obs_data - output)
+    
     mu_post  = mu_0 + (Sigma_post @ Jacobian.T  @ (obs_data - output))/ (beta**2)
-    #mu_post  = mu_0 + (Sigma_post @ Jacobian.T  @ (obs_data - output2))/ (beta**2)
+    
     
     print("\n Posterior Covariance")
     print(Sigma_post)
@@ -528,30 +500,29 @@ def main():
 
     
     
-    #print(obs_data.shape)
-    dot = pyro.render_model(pyro_model, model_args=(test_list, num_layers, model, Interpolation_matrix,  u_shift, phi_r, obs_data ,Sigma_l, beta, device),render_distributions=True)
-    #pyro.set_rng_seed(42)
+
+    dot = pyro.render_model(pyro_model, model_args=(test_list, num_layers, model, Interpolation_matrix,  u_shift, phi_r, obs_data ,Sigma_l, beta, device),render_distributions=True,  filename="./saved_model/Bayesian_graph.png")
+    
 
     prior = Predictive(pyro_model,num_samples=10000)(test_list, num_layers, model, Interpolation_matrix,   u_shift, phi_r, obs_data , Sigma_l, beta,  device)
-    #plt.figure(figsize=(8,10))
+
     data = az.from_pyro(prior=prior)
-    #az.plot_trace(data.prior)
+
     
     ################################################################################
     # Posterior
     ################################################################################
     pyro.primitives.enable_validation(is_validate=True)
     nuts_kernel = NUTS(pyro_model, step_size=0.0085, adapt_step_size=True, target_accept_prob=0.7, full_mass=True, max_tree_depth=10, init_strategy=init_to_mean)
-    mcmc = MCMC(nuts_kernel, num_samples=4000, mp_context="spawn", warmup_steps=3000,num_chains=5, disable_validation=True)
+    mcmc = MCMC(nuts_kernel, num_samples=500, mp_context="spawn", warmup_steps=500,num_chains=5, disable_validation=True)
     mcmc.run(test_list, num_layers, model,Interpolation_matrix,  u_shift, phi_r, obs_data ,Sigma_l, beta,  device)
     posterior_samples = mcmc.get_samples(group_by_chain=False)
     samples = mcmc.get_samples(group_by_chain=True)
     
     summary_stats = summary(samples)
-    #print(summary_stats) 
+  
     # Convert to a Pandas DataFrame
     df = pd.DataFrame.from_dict(summary_stats, orient="index")
-    # This transposes the dictionary so each parameter is a row
 
     # Now save to CSV
     df.to_csv("pyro_summary.csv")

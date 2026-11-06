@@ -382,6 +382,7 @@ def create_true_data(mesh, nodes, shift,  slope=200, filename=None):
     c = torch.tensor([sp_coords_copy_test[[test_list[0]["id"][0], test_list[1]["id"][0], test_list[2]["id"][0], test_list[3]["id"][0]], 2]], dtype=dtype, device=device)+\
         torch.tensor(shift, dtype=dtype, device=device)
     
+    
     gempy_model =GempyModel(test_list, geo_model_test, num_layers, slope=slope, dtype=dtype, device=device)
     local_node_indices = np.arange(len(mesh_coordinates))
     
