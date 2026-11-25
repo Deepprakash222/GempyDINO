@@ -9,7 +9,7 @@ import h5py
 
 
 #from helpers import *
-from generate_samples2 import *
+from generate_samples import *
 from mpi4py import MPI
 
 import warnings
