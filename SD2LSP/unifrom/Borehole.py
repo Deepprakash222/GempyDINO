@@ -10,7 +10,7 @@ import hippylib as hp
 import hippyflow as hf
 
 from helpers import *
-from generate_samples2 import *
+from generate_samples import *
 #from train_nn import *
 import arviz as az
 from pyro.infer import MCMC, NUTS, Predictive, EmpiricalMarginal
