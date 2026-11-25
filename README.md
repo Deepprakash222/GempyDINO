@@ -62,7 +62,6 @@ Two synthetic geological models are included. Each has a uniform and a Gaussian 
 | `SD2LSP/` | Salt Dome 2-layer structural model single parameter|
 | `SD3LMP/` | Salt Dome 3-layer structural model multiple parameter|
 
-> Note: in `SD2LSP` the uniform-sampling folder is spelled `unifrom/`. Scripts read the folder name to locate their results, so keep the spelling unless you rename it everywhere.
 
 ## Repository structure
 
