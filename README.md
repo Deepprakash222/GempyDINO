@@ -71,7 +71,7 @@ GempyDINO/
 ├── environment.yml               # Conda environment (osx-arm64)
 ├── requirements.txt              # Package list
 ├── SD2LSP/ , SD3LMP/
-│   ├── NN_ac(c)uracies.ipynb     # Surrogate accuracy comparison across settings
+│   ├── NN_accuracies.ipynb     # Surrogate accuracy comparison across settings
 │   ├── Noise_1.ipynb             # Inversion results, 1% noise
 │   ├── Noise_5.ipynb             # Inversion results, 5% noise
 │   └── uniform/ , gaussian/
@@ -79,8 +79,8 @@ GempyDINO/
 │       ├── generate_samples(2).py # GemPy model, sampling, ∇ₖm via autodiff
 │       ├── save_gempy_data.py     # Stages 1–2: generate and store training data (MPI)
 │       ├── generate_sample.sh     # SLURM job script for save_gempy_data.py
-│       ├── POD_and_reductions.ipynb  # Stage 3: weighted POD, latent dimension choice
-│       ├── NN_training.ipynb      # Stage 3: DNN training (with/without Jacobian loss)
+│       ├── PDE_solver.ipynb        # Stage 3: Solve PDE, adjoint and it's sensitivity to get state variable u and Jacobian ∇ₖu
+│       ├── NN_training.ipynb      # Stage 3: Weighted POD and DNN training (with/without Jacobian loss)
 │       ├── train_nn.py            # Network definitions and training routines
 │       ├── helpers.py             # Shared utilities
 │       ├── gradient.py            # Gradient of the posterior used by GLA
@@ -129,27 +129,25 @@ Run every script from inside the case folder, for example `SD3LMP/uniform/`. The
 
 ```bash
 cd SD3LMP/uniform
-mpirun -n 32 python save_gempy_data.py
+mpirun -n 4 python save_gempy_data.py
 # or, on a SLURM cluster:
 sbatch generate_sample.sh
 ```
 
 **3. Reduce and train the surrogate.** Run the notebooks in this order:
-1. `POD_and_reductions.ipynb`: computes the weighted POD basis and picks the latent dimension *r*
-2. `NN_training.ipynb`: trains DNNs with and without the derivative-informed loss and saves them to `saved_model/`
+1. `PDE_solver.ipynb`: Solve PDE, adjoint and it's sensitivity to get state variable u and Jacobian ∇ₖu. 
+2. `NN_training.ipynb`: Computes the weighted POD basis and picks the latent dimension *r*. Trains DNNs with and without the derivative-informed loss and saves them to `saved_model/`
 
 **4. Bayesian inversion:**
 
 ```bash
 python Borehole.py              # 5-borehole acquisition
 python Distributed.py           # 20 x 20 distributed acquisition
-# or the cleaned-up version, with all settings in one CONFIG block:
-python inversion_simplified.py
+
 ```
 
-The main settings in `inversion_simplified.py` are `NOISE_LEVEL` (0.01 or 0.05), `PRIOR_TYPE`, `PRIOR_STD`, `SHIFT` (offset of the prior mean), `NN_FILE`, and the NUTS/MCMC settings (default: 5 chains, 500 warm-up steps and 500 samples). Results include the GLA and NUTS posterior statistics and plots of the posterior geological model (mean and ±1 std).
 
-**Results analysis:** `NN_ac(c)uracies.ipynb`, `Noise_1.ipynb` and `Noise_5.ipynb` in each case folder rebuild the paper's accuracy and inversion figures.
+**Results analysis:** `NN_accuracies.ipynb`, `Noise_1.ipynb` and `Noise_5.ipynb` in each case folder rebuild the paper's accuracy and inversion figures.
 
 ---
 
